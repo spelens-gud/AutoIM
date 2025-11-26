@@ -1,0 +1,45 @@
+fail_fast: false
+
+repos:
+    - repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v4.6.0
+      hooks:
+          - id: check-byte-order-marker
+          - id: check-case-conflict
+          - id: check-merge-conflict
+          - id: check-symlinks
+          - id: check-yaml
+          - id: end-of-file-fixer
+          - id: mixed-line-ending
+          - id: trailing-whitespace
+    - repo: https://github.com/psf/black
+      rev: 25.9.0
+      hooks:
+          - id: black
+            language_version: python3
+
+    - repo: https://github.com/astral-sh/ruff-pre-commit
+      rev: v0.14.1
+      hooks:
+          - id: ruff
+            args: [--fix, --exit-non-zero-on-fix]
+
+    - repo: https://github.com/pre-commit/mirrors-mypy
+      rev: v1.18.2
+      hooks:
+          - id: mypy
+    - repo: local
+      hooks:
+          - id: pytest
+            name: pytest
+            description: Run Python unit tests
+            entry: bash -c 'pytest -q'
+            language: python
+            pass_filenames: false
+            always_run: true
+          - id: typos
+            name: typos
+            description: check typo
+            entry: bash -c 'typos'
+            language: rust
+            files: \.*$
