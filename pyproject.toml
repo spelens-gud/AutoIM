@@ -1,10 +1,13 @@
 [project]
-name = "py-demo"
+name = "wangwang-rpa"
 version = "0.1.0"
-description = "Add your description here"
+description = "旺旺RPA自动化系统 - 自动化处理旺旺即时通讯消息的RPA工具"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "pyyaml>=6.0",
+    "selenium>=4.0",
+    "webdriver-manager>=4.0",
 ]
 [project.optional-dependencies]
 dev = [

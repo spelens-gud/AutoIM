@@ -1,0 +1,45 @@
+# 旺旺RPA系统配置文件
+
+# 浏览器配置
+browser:
+  # 是否使用无头模式（true: 后台运行，false: 显示浏览器窗口）
+  headless: false
+  # 浏览器用户数据目录（用于保存登录状态等）
+  user_data_dir: ./browser_data
+
+# 旺旺配置
+wangwang:
+  # 1688旺旺聊天URL
+  url: https://amos.alicdn.com/msg.aw
+  # 消息检查间隔（秒），建议3-10秒
+  check_interval: 3
+
+# 消息配置
+message:
+  # 消息发送失败时的重试次数
+  retry_times: 2
+  # 重试延迟时间（秒）
+  retry_delay: 1
+
+# 会话配置
+session:
+  # 会话无活动超时时间（秒），默认30分钟
+  inactive_timeout: 1800
+
+# 自动回复配置
+auto_reply:
+  # 是否启用自动回复功能
+  enabled: true
+  # 自动回复规则文件路径
+  rules_file: config/auto_reply_rules.yaml
+
+# 日志配置
+logging:
+  # 日志级别: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: INFO
+  # 日志文件路径
+  file: logs/wangwang_rpa.log
+  # 单个日志文件最大字节数（默认10MB）
+  max_bytes: 10485760
+  # 日志文件备份数量
+  backup_count: 5
