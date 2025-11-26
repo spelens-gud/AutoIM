@@ -23,6 +23,17 @@
 
 ### 安装
 
+#### 使用 uv（推荐）
+
+```bash
+# 克隆项目
+git clone <repository-url>
+cd wangwang-rpa
+
+# 使用 uv 安装依赖
+uv pip install -e .
+```
+
 #### 使用 pip
 
 ```bash
@@ -38,16 +49,6 @@ source .venv/bin/activate  # Linux/Mac
 
 # 安装依赖
 pip install -e .
-```
-
-#### 使用 uv（推荐）
-
-```bash
-# 克隆项目
-git clone <repository-url>
-cd wangwang-rpa
-
-# 使用 uv 安装依赖
 uv pip install -e .
 ```
 
@@ -77,6 +78,8 @@ uv pip install -e .
 
 ### 基本使用
 
+#### 方式一：命令行模式
+
 ```bash
 # 启动 RPA 系统（有头模式，可以看到浏览器）
 python main.py
@@ -89,6 +92,55 @@ python main.py --config config/custom_config.yaml
 
 # 停止系统
 # 按 Ctrl+C 优雅退出
+```
+
+#### 方式二：Web API 模式（推荐）
+
+```bash
+# 1. 仅启动 API 服务（通过 API 接口控制 RPA）
+python api_server.py
+
+# 2. 启动 API 服务并自动启动 RPA 系统（集成模式）
+python api_server.py --auto-start
+
+# 3. 启动 API 服务并自动启动 RPA（无头模式）
+python api_server.py --auto-start --headless
+
+# 4. 指定配置文件和端口
+python api_server.py --auto-start --config custom_config.yaml --port 8080
+```
+
+API 服务启动后，可以通过 HTTP 请求控制 RPA 系统：
+
+```bash
+# 健康检查
+curl http://localhost:5000/api/health
+
+# 启动 RPA
+curl -X POST http://localhost:5000/api/rpa/start
+
+# 发送消息
+curl -X POST http://localhost:5000/api/message/send \
+  -H "Content-Type: application/json" \
+  -d '{"contact_id": "店铺名称", "content": "你好"}'
+
+# 查看系统状态
+curl http://localhost:5000/api/rpa/status
+```
+
+详细的 API 文档请查看 [API.md](API.md)
+
+#### 方式三：向指定店铺发送消息
+
+```bash
+# 向店铺发送消息并等待回复
+python send_to_shop.py --shop "某某旗舰店" --message "你好，请问有货吗？"
+
+# 只发送消息，不等待回复
+python send_to_shop.py --shop "某某旗舰店" --message "你好" --no-wait
+
+# 设置等待回复的超时时间
+python send_to_shop.py --shop "某某旗舰店" --message "你好" --timeout 120
 ```
 
 ## 配置说明

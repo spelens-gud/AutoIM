@@ -77,19 +77,16 @@ class BrowserController:
                 chrome_options.add_argument("--disable-gpu")
                 logger.info("使用无头模式启动浏览器")
             
-            # 设置用户数据目录
-            if self.user_data_dir:
-                user_data_path = Path(self.user_data_dir)
-                user_data_path.mkdir(parents=True, exist_ok=True)
-                chrome_options.add_argument(f"--user-data-dir={user_data_path.absolute()}")
-                logger.info(f"使用用户数据目录: {user_data_path.absolute()}")
-            
             # 其他常用选项
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option("useAutomationExtension", False)
+            
+            # 设置窗口大小
+            chrome_options.add_argument("--window-size=1920,1080")
+            chrome_options.add_argument("--start-maximized")
             
             # 启动浏览器
             # 尝试使用 webdriver-manager 自动管理驱动
@@ -330,7 +327,7 @@ class BrowserController:
         """检查当前是否已登录。
         
         通过检查特定元素或Cookie来判断登录状态。
-        具体实现需要根据旺旺网页版的实际情况调整。
+        针对 1688 旺旺网页版进行优化。
         
         Returns:
             True表示已登录，False表示未登录
@@ -344,32 +341,49 @@ class BrowserController:
         try:
             logger.debug("检查登录状态...")
             
-            # 方法1: 检查是否存在登录相关的Cookie
-            cookies = self.driver.get_cookies()
-            has_auth_cookie = any(
-                cookie.get("name") in ["token", "session", "auth", "login"]
-                for cookie in cookies
-            )
-            
-            if has_auth_cookie:
-                logger.info("检测到登录Cookie，可能已登录")
-                return True
-            
-            # 方法2: 检查当前URL是否包含登录页面特征
+            # 方法1: 检查当前URL是否包含登录页面特征
             current_url = self.driver.current_url
             if "login" in current_url.lower():
                 logger.info("当前在登录页面，未登录")
                 return False
             
-            # 方法3: 尝试查找登录后才有的元素（需要根据实际页面调整）
-            # 这里提供一个通用的检查逻辑
-            try:
-                # 尝试查找用户信息相关元素，超时时间设短一些
-                self.wait_for_element(".user-info", timeout=3)
-                logger.info("找到用户信息元素，已登录")
+            # 方法2: 检查是否存在 1688 登录相关的Cookie
+            cookies = self.driver.get_cookies()
+            cookie_names = [cookie.get("name", "") for cookie in cookies]
+            
+            # 1688 常见的登录 Cookie
+            auth_cookies = ["_tb_token_", "cookie2", "t", "unb", "uc1", "lgc"]
+            has_auth_cookie = any(name in cookie_names for name in auth_cookies)
+            
+            if has_auth_cookie:
+                logger.info("检测到 1688 登录Cookie，已登录")
                 return True
-            except BrowserException:
-                logger.info("未找到用户信息元素，可能未登录")
+            
+            # 方法3: 尝试查找登录后才有的元素
+            try:
+                # 1688 IM 页面登录后的常见元素
+                # 可能的选择器：会话列表、聊天窗口等
+                elements_to_check = [
+                    ".chat-list",
+                    ".message-list", 
+                    ".contact-list",
+                    "#app",
+                    ".im-container"
+                ]
+                
+                for selector in elements_to_check:
+                    try:
+                        self.wait_for_element(selector, timeout=2)
+                        logger.info(f"找到登录后的元素 {selector}，已登录")
+                        return True
+                    except BrowserException:
+                        continue
+                
+                logger.info("未找到登录后的元素，可能未登录")
+                return False
+                
+            except Exception as e:
+                logger.debug(f"检查页面元素时出错: {str(e)}")
                 return False
                 
         except Exception as e:

@@ -9,8 +9,8 @@ browser:
 
 # 旺旺配置
 wangwang:
-  # 1688旺旺聊天URL
-  url: https://amos.alicdn.com/msg.aw
+  # 1688旺旺聊天URL（AMOS 旺旺网页版）
+  url: https://amos.1688.com/
   # 消息检查间隔（秒），建议3-10秒
   check_interval: 3
 
