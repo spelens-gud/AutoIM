@@ -6,6 +6,8 @@ dist/
 wheels/
 *.egg-info
 
+browser_data
+
 # Virtual environments
 .venv
 .pytest_cache/
