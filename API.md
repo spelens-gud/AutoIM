@@ -187,7 +187,72 @@ curl http://localhost:5000/api/message/check
 
 ---
 
-### 7. 获取会话列表
+### 7. 获取聊天记录
+
+获取与指定联系人的聊天记录。
+
+**接口**: `GET /api/message/history/<contact_id>`
+
+**路径参数**:
+- `contact_id`: 联系人ID或联系人名称
+
+**查询参数**:
+- `max_messages`: 最多获取的消息数量（1-500），默认100
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "data": {
+    "contact_id": "某某旗舰店",
+    "count": 15,
+    "messages": [
+      {
+        "message_id": "msg_001",
+        "contact_id": "shop_123",
+        "contact_name": "某某旗舰店",
+        "content": "你好，请问有货吗？",
+        "message_type": "text",
+        "timestamp": "2025-11-26T18:50:00",
+        "is_sent": true,
+        "is_auto_reply": false
+      },
+      {
+        "message_id": "msg_002",
+        "contact_id": "shop_123",
+        "contact_name": "某某旗舰店",
+        "content": "您好，有货的",
+        "message_type": "text",
+        "timestamp": "2025-11-26T18:51:00",
+        "is_sent": false,
+        "is_auto_reply": false
+      }
+    ]
+  }
+}
+```
+
+**curl 示例**:
+```bash
+# 获取默认数量（100条）的聊天记录
+curl http://localhost:5000/api/message/history/某某旗舰店
+
+# 获取最近50条聊天记录
+curl "http://localhost:5000/api/message/history/某某旗舰店?max_messages=50"
+
+# URL编码的联系人名称
+curl http://localhost:5000/api/message/history/%E6%9F%90%E6%9F%90%E6%97%97%E8%88%B0%E5%BA%97
+```
+
+**注意事项**:
+- 消息按时间顺序排列（从旧到新）
+- 如果联系人名称包含特殊字符，需要进行URL编码
+- 该接口会切换到指定联系人的聊天窗口并获取消息
+- 获取大量历史消息可能需要较长时间
+
+---
+
+### 8. 获取会话列表
 
 获取所有会话或仅活跃会话。
 
@@ -340,11 +405,17 @@ print(response.json())
 response = requests.get(f"{BASE_URL}/api/message/check")
 print(response.json())
 
-# 4. 获取系统状态
+# 4. 获取聊天记录
+response = requests.get(f"{BASE_URL}/api/message/history/某某旗舰店", params={
+    "max_messages": 50
+})
+print(response.json())
+
+# 5. 获取系统状态
 response = requests.get(f"{BASE_URL}/api/rpa/status")
 print(response.json())
 
-# 5. 停止RPA系统
+# 6. 停止RPA系统
 response = requests.post(f"{BASE_URL}/api/rpa/stop")
 print(response.json())
 ```

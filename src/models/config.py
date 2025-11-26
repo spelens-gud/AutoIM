@@ -13,7 +13,9 @@ class Config:
     Attributes:
         browser_headless: 浏览器是否使用无头模式
         browser_user_data_dir: 浏览器用户数据目录
-        wangwang_url: 旺旺网页版URL
+        wangwang_home_url: 1688首页URL（用于登录）
+        wangwang_chat_url: 旺旺聊天页面URL
+        wangwang_login_url: 1688登录页面URL
         check_interval: 消息检查间隔（秒）
         retry_times: 消息发送重试次数
         retry_delay: 重试延迟时间（秒）
@@ -28,7 +30,9 @@ class Config:
     
     browser_headless: bool
     browser_user_data_dir: str
-    wangwang_url: str
+    wangwang_home_url: str
+    wangwang_chat_url: str
+    wangwang_login_url: str
     check_interval: int
     retry_times: int
     retry_delay: int

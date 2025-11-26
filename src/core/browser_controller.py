@@ -303,20 +303,43 @@ class BrowserController:
             
             logger.info(f"从文件加载Cookie: {filepath}")
             
-            # 加载并设置Cookie
+            # 获取当前页面域名
+            current_url = self.driver.current_url
+            logger.debug(f"当前页面URL: {current_url}")
+            
+            # 加载Cookie
             with open(filepath, "rb") as f:
                 cookies = pickle.load(f)
             
+            logger.info(f"从文件读取到 {len(cookies)} 个Cookie")
+            
+            # 统计成功和失败的Cookie数量
+            success_count = 0
+            fail_count = 0
+            
             for cookie in cookies:
                 try:
+                    # 检查Cookie是否有必需的字段
+                    if 'name' not in cookie or 'value' not in cookie:
+                        logger.warning(f"Cookie缺少必需字段: {cookie}")
+                        fail_count += 1
+                        continue
+                    
+                    # 尝试添加Cookie
                     self.driver.add_cookie(cookie)
+                    success_count += 1
+                    logger.debug(f"✓ 成功添加Cookie: {cookie.get('name')} (domain: {cookie.get('domain', 'N/A')})")
                 except Exception as e:
-                    logger.warning(f"添加Cookie失败: {cookie.get('name', 'unknown')} - {str(e)}")
+                    fail_count += 1
+                    logger.debug(f"✗ 添加Cookie失败: {cookie.get('name', 'unknown')} - {str(e)}")
             
-            logger.info(f"成功加载 {len(cookies)} 个Cookie")
+            if success_count > 0:
+                logger.info(f"Cookie加载完成 - 成功: {success_count}, 失败: {fail_count}, 总数: {len(cookies)}")
+            else:
+                logger.warning(f"所有Cookie加载失败！可能是域名不匹配或Cookie格式错误")
             
-            # 刷新页面以应用Cookie
-            self.driver.refresh()
+            # 注意：不在这里刷新页面，让调用者决定何时刷新
+            # 这样可以避免在错误的时机刷新导致Cookie失效
             
         except Exception as e:
             error_msg = f"加载Cookie失败: {str(e)}"
@@ -341,50 +364,77 @@ class BrowserController:
         try:
             logger.debug("检查登录状态...")
             
-            # 方法1: 检查当前URL是否包含登录页面特征
+            # 方法1: 检查当前URL是否包含登录页面或错误页面特征
             current_url = self.driver.current_url
-            if "login" in current_url.lower():
-                logger.info("当前在登录页面，未登录")
+            logger.debug(f"当前URL: {current_url}")
+            
+            # 检查是否在登录页面（包括淘宝登录和1688登录）
+            login_indicators = [
+                "login.taobao.com",
+                "login.1688.com",
+                "/login"
+            ]
+            if any(indicator in current_url.lower() for indicator in login_indicators):
+                logger.info(f"当前在登录页面: {current_url}，未登录")
                 return False
             
-            # 方法2: 检查是否存在 1688 登录相关的Cookie
+            # 检查是否在1688的404错误页面
+            # https://page.1688.com/shtml/static/wrongpage.html 是1688的标准404页面
+            error_indicators = [
+                "page.1688.com/shtml/static/wrongpage.html",
+                "wrongpage.html",
+                "/wrongpage"
+            ]
+            if any(indicator in current_url.lower() for indicator in error_indicators):
+                logger.warning(f"当前在1688错误页面(404): {current_url}，判定为未登录或无权限访问")
+                return False
+            
+            # 方法2: 检查是否存在 1688 登录相关的Cookie（最重要的判断依据）
             cookies = self.driver.get_cookies()
             cookie_names = [cookie.get("name", "") for cookie in cookies]
             
-            # 1688 常见的登录 Cookie
-            auth_cookies = ["_tb_token_", "cookie2", "t", "unb", "uc1", "lgc"]
+            # 1688/淘宝最关键的登录 Cookie
+            # _tb_token_ 和 cookie2 是最重要的认证Cookie
+            critical_cookies = ["_tb_token_", "cookie2"]
+            has_critical_cookies = all(name in cookie_names for name in critical_cookies)
+            
+            # 其他辅助登录 Cookie
+            auth_cookies = ["t", "unb", "uc1", "lgc"]
             has_auth_cookie = any(name in cookie_names for name in auth_cookies)
             
-            if has_auth_cookie:
-                logger.info("检测到 1688 登录Cookie，已登录")
+            logger.debug(f"Cookie检查 - 关键Cookie: {has_critical_cookies}, 辅助Cookie: {has_auth_cookie}")
+            logger.debug(f"当前Cookie列表: {cookie_names}")
+            
+            # 如果有关键Cookie，说明已登录
+            if has_critical_cookies:
+                logger.info("✓ 检测到关键登录Cookie (_tb_token_, cookie2)，已登录")
                 return True
             
-            # 方法3: 尝试查找登录后才有的元素
+            # 如果有辅助Cookie但没有关键Cookie，可能是Cookie不完整
+            if has_auth_cookie:
+                logger.warning("检测到部分登录Cookie，但缺少关键Cookie，可能未完全登录")
+                return False
+            
+            # 方法3: 检查页面标题
             try:
-                # 1688 IM 页面登录后的常见元素
-                # 可能的选择器：会话列表、聊天窗口等
-                elements_to_check = [
-                    ".chat-list",
-                    ".message-list", 
-                    ".contact-list",
-                    "#app",
-                    ".im-container"
-                ]
+                page_title = self.driver.title
+                logger.debug(f"页面标题: {page_title}")
                 
-                for selector in elements_to_check:
-                    try:
-                        self.wait_for_element(selector, timeout=2)
-                        logger.info(f"找到登录后的元素 {selector}，已登录")
-                        return True
-                    except BrowserException:
-                        continue
-                
-                logger.info("未找到登录后的元素，可能未登录")
-                return False
-                
+                # 如果页面标题包含"登录"，说明未登录
+                if "登录" in page_title:
+                    logger.info(f"页面标题包含'登录': {page_title}，未登录")
+                    return False
+                    
+                # 如果页面标题包含"旺旺"或"消息"，说明已登录到聊天页面
+                if "旺旺" in page_title or "消息" in page_title or "IM" in page_title:
+                    logger.info(f"页面标题显示已登录: {page_title}")
+                    return True
             except Exception as e:
-                logger.debug(f"检查页面元素时出错: {str(e)}")
-                return False
+                logger.debug(f"检查页面标题时出错: {str(e)}")
+            
+            # 默认返回False，需要登录
+            logger.info("未检测到明确的登录标识，判定为未登录")
+            return False
                 
         except Exception as e:
             logger.warning(f"检查登录状态时发生错误: {str(e)}")

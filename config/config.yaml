@@ -9,8 +9,12 @@ browser:
 
 # 旺旺配置
 wangwang:
-  # 1688旺旺聊天URL（AMOS 旺旺网页版）
-  url: https://amos.1688.com/
+  # 1688首页URL（用于登录和获取cookie）
+  home_url: https://www.1688.com/
+  # 1688旺旺聊天URL（登录成功后访问）- AIR应用平台的旺旺IM
+  chat_url: https://air.1688.com/app/ocms-fusion-components-1688/def_cbu_web_im/index.html#/
+  # 1688登录页面URL（直接使用1688登录）
+  login_url: https://login.1688.com/member/signin.htm?Done=https://www.1688.com/
   # 消息检查间隔（秒），建议3-10秒
   check_interval: 3
 

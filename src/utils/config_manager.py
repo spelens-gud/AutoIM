@@ -64,7 +64,9 @@ class ConfigManager:
             self.config = Config(
                 browser_headless=config_data.get('browser', {}).get('headless', False),
                 browser_user_data_dir=config_data.get('browser', {}).get('user_data_dir', './browser_data'),
-                wangwang_url=config_data.get('wangwang', {}).get('url', 'https://wangwang.taobao.com'),
+                wangwang_home_url=config_data.get('wangwang', {}).get('home_url', 'https://www.1688.com/'),
+                wangwang_chat_url=config_data.get('wangwang', {}).get('chat_url', 'https://amos.1688.com/msg/message.htm'),
+                wangwang_login_url=config_data.get('wangwang', {}).get('login_url', 'https://login.taobao.com/?redirect_url=https%3A%2F%2Fwww.1688.com%2F'),
                 check_interval=config_data.get('wangwang', {}).get('check_interval', 3),
                 retry_times=config_data.get('message', {}).get('retry_times', 2),
                 retry_delay=config_data.get('message', {}).get('retry_delay', 1),
@@ -128,8 +130,12 @@ class ConfigManager:
             return False
         
         # 验证URL格式
-        if not self.config.wangwang_url.startswith(('http://', 'https://')):
-            logger.error(f"旺旺URL格式无效: {self.config.wangwang_url}")
+        if not self.config.wangwang_home_url.startswith(('http://', 'https://')):
+            logger.error(f"1688首页URL格式无效: {self.config.wangwang_home_url}")
+            return False
+        
+        if not self.config.wangwang_chat_url.startswith(('http://', 'https://')):
+            logger.error(f"旺旺聊天URL格式无效: {self.config.wangwang_chat_url}")
             return False
         
         logger.info("配置验证通过")
@@ -149,7 +155,9 @@ class ConfigManager:
                 'user_data_dir': './browser_data'
             },
             'wangwang': {
-                'url': 'https://wangwang.taobao.com',
+                'home_url': 'https://www.1688.com/',
+                'chat_url': 'https://air.1688.com/app/ocms-fusion-components-1688/def_cbu_web_im/index.html#/',
+                'login_url': 'https://login.1688.com/member/signin.htm?Done=https://www.1688.com/',
                 'check_interval': 3
             },
             'message': {

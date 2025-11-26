@@ -98,9 +98,17 @@ class WangWangRPA:
             # 运行状态标志
             self.is_running = False
             
-            # 注册信号处理器，用于优雅退出
-            signal.signal(signal.SIGINT, self._signal_handler)
-            signal.signal(signal.SIGTERM, self._signal_handler)
+            # 注册信号处理器，用于优雅退出（仅在主线程中注册）
+            try:
+                import threading
+                if threading.current_thread() is threading.main_thread():
+                    signal.signal(signal.SIGINT, self._signal_handler)
+                    signal.signal(signal.SIGTERM, self._signal_handler)
+                    logger.debug("信号处理器已注册")
+                else:
+                    logger.debug("非主线程，跳过信号处理器注册")
+            except Exception as e:
+                logger.debug(f"注册信号处理器失败（这在非主线程中是正常的）: {e}")
             
             logger.info("=" * 60)
             logger.info("旺旺RPA系统初始化完成")
@@ -125,7 +133,7 @@ class WangWangRPA:
     def start(self) -> None:
         """启动RPA系统。
         
-        启动浏览器、导航到旺旺页面、检查登录状态。
+        启动浏览器、检查登录状态、导航到旺旺聊天页面。
         
         Raises:
             WangWangRPAException: 启动失败时抛出
@@ -138,23 +146,136 @@ class WangWangRPA:
             self.browser.start()
             logger.info("浏览器启动成功")
             
-            # 导航到旺旺页面
-            logger.info(f"正在导航到旺旺页面: {self.config.wangwang_url}")
-            self.browser.navigate_to(self.config.wangwang_url)
+            # 先导航到1688首页
+            logger.info(f"正在导航到1688首页: {self.config.wangwang_home_url}")
+            self.browser.navigate_to(self.config.wangwang_home_url)
             logger.info("导航成功")
             
             # 等待页面加载
-            time.sleep(3)
+            time.sleep(2)
             
-            # 检查登录状态
-            logger.info("正在检查登录状态...")
-            if not self.browser.is_logged_in():
-                logger.warning("检测到未登录状态")
-                self._wait_for_login()
+            # 尝试加载已保存的Cookie
+            cookie_file = f"{self.config.browser_user_data_dir}/cookies.pkl"
+            cookie_loaded_successfully = False
+            
+            # 检查Cookie文件是否存在
+            import os
+            if os.path.exists(cookie_file):
+                try:
+                    logger.info(f"发现已保存的Cookie文件: {cookie_file}")
+                    
+                    # 检查Cookie文件的修改时间
+                    import datetime
+                    cookie_mtime = os.path.getmtime(cookie_file)
+                    cookie_age = time.time() - cookie_mtime
+                    cookie_age_hours = cookie_age / 3600
+                    logger.info(f"Cookie文件创建于 {cookie_age_hours:.1f} 小时前")
+                    
+                    # 如果Cookie超过24小时，可能已过期
+                    if cookie_age_hours > 24:
+                        logger.warning(f"Cookie文件已超过24小时，可能已过期")
+                    
+                    # 加载Cookie
+                    self.browser.load_cookies(cookie_file)
+                    logger.info("Cookie已加载到浏览器")
+                    
+                    # 不要立即刷新，而是导航到一个新页面让Cookie生效
+                    # 这样可以避免某些安全检查
+                    logger.info("导航到1688首页以应用Cookie...")
+                    self.browser.navigate_to(self.config.wangwang_home_url)
+                    time.sleep(3)  # 等待页面加载
+                    
+                    # 检查登录状态
+                    logger.info("验证Cookie是否有效...")
+                    if self.browser.is_logged_in():
+                        logger.info("✓ Cookie有效，已自动登录1688账号")
+                        cookie_loaded_successfully = True
+                    else:
+                        logger.warning("✗ Cookie已过期或无效，需要重新登录")
+                        # 删除无效的Cookie文件
+                        try:
+                            os.remove(cookie_file)
+                            logger.info("已删除无效的Cookie文件")
+                        except:
+                            pass
+                        
+                except Exception as e:
+                    logger.warning(f"加载Cookie时出错: {e}")
             else:
-                logger.info("已登录，可以开始监控消息")
+                logger.info("未找到已保存的Cookie文件，需要首次登录")
             
-            logger.info("RPA系统启动完成")
+            # 如果Cookie无效或不存在，需要登录
+            if not cookie_loaded_successfully:
+                logger.info("正在检查登录状态...")
+                if not self.browser.is_logged_in():
+                    logger.warning("检测到未登录状态，需要先登录")
+                    self._wait_for_login()
+                else:
+                    logger.info("已登录1688账号")
+            
+            # 登录成功后，导航到旺旺聊天页面
+            logger.info(f"正在导航到旺旺聊天页面: {self.config.wangwang_chat_url}")
+            self.browser.navigate_to(self.config.wangwang_chat_url)
+            
+            # 等待SPA应用加载完成（AIR应用需要更长的加载时间）
+            logger.info("等待旺旺聊天页面加载...")
+            time.sleep(5)  # 等待聊天页面加载
+            
+            # 检查是否成功进入聊天页面
+            current_url = self.browser.driver.current_url
+            logger.info(f"当前页面URL: {current_url}")
+            
+            # 检查是否遇到1688的404错误页面
+            error_indicators = [
+                "page.1688.com/shtml/static/wrongpage.html",
+                "wrongpage.html"
+            ]
+            is_error_page = any(indicator in current_url.lower() for indicator in error_indicators)
+            
+            if is_error_page:
+                logger.warning(f"配置的聊天页面URL无法访问(404): {self.config.wangwang_chat_url}")
+                logger.info("尝试使用备用URL...")
+                
+                # 尝试备用URL列表
+                backup_urls = [
+                    "https://air.1688.com/app/ocms-fusion-components-1688/def_cbu_web_im/index.html#/",  # AIR旺旺IM
+                    "https://work.1688.com/home/message.htm",  # 工作台消息中心
+                    "https://message.1688.com/",  # 消息中心
+                    "https://www.1688.com/"  # 首页（作为最后备选）
+                ]
+                
+                success = False
+                for backup_url in backup_urls:
+                    try:
+                        logger.info(f"尝试访问: {backup_url}")
+                        self.browser.navigate_to(backup_url)
+                        time.sleep(5)  # 等待页面加载
+                        
+                        current_url = self.browser.driver.current_url
+                        # 检查是否还是404页面
+                        if not any(indicator in current_url.lower() for indicator in error_indicators):
+                            logger.info(f"成功访问: {current_url}")
+                            success = True
+                            break
+                        else:
+                            logger.warning(f"该URL也无法访问: {backup_url}")
+                    except Exception as e:
+                        logger.warning(f"访问 {backup_url} 失败: {e}")
+                        continue
+                
+                if not success:
+                    error_msg = "无法找到可用的旺旺聊天页面，所有URL都返回404"
+                    logger.error(error_msg)
+                    raise WangWangRPAException(error_msg)
+            
+            # 检查页面标题，确认是否成功加载
+            try:
+                page_title = self.browser.driver.title
+                logger.info(f"聊天页面标题: {page_title}")
+            except Exception as e:
+                logger.warning(f"无法获取页面标题: {e}")
+            
+            logger.info("RPA系统启动完成，已进入旺旺聊天页面")
             
         except BrowserException as e:
             error_msg = f"浏览器启动失败: {str(e)}"
@@ -168,13 +289,31 @@ class WangWangRPA:
     def _wait_for_login(self) -> None:
         """等待用户手动登录并保存Cookie。
         
-        当检测到未登录状态时，等待用户手动完成登录操作，
+        当检测到未登录状态时，导航到登录页面，等待用户手动完成登录操作，
         然后保存登录凭证。
+        
+        Raises:
+            WangWangRPAException: 等待登录超时时抛出
         """
         logger.info("=" * 60)
-        logger.info("请在浏览器中手动完成登录操作")
-        logger.info("登录完成后，系统将自动保存登录状态")
+        logger.info("检测到未登录状态，正在跳转到登录页面...")
         logger.info("=" * 60)
+        
+        try:
+            # 导航到登录页面
+            logger.info(f"正在导航到登录页面: {self.config.wangwang_login_url}")
+            self.browser.navigate_to(self.config.wangwang_login_url)
+            time.sleep(3)  # 等待页面加载
+            
+            logger.info("=" * 60)
+            logger.info("请在浏览器中手动完成登录操作")
+            logger.info("支持扫码登录或账号密码登录")
+            logger.info("登录完成后，系统将自动保存登录状态")
+            logger.info("=" * 60)
+            
+        except Exception as e:
+            logger.warning(f"导航到登录页面失败: {e}")
+            raise WangWangRPAException(f"无法打开登录页面: {e}")
         
         # 等待用户登录
         max_wait_time = 300  # 最多等待5分钟
@@ -189,14 +328,29 @@ class WangWangRPA:
                 if self.browser.is_logged_in():
                     logger.info("检测到登录成功！")
                     
+                    # 等待一下确保登录状态稳定
+                    time.sleep(2)
+                    
                     # 保存Cookie
                     cookie_file = f"{self.config.browser_user_data_dir}/cookies.pkl"
                     try:
+                        # 确保目录存在
+                        import os
+                        os.makedirs(self.config.browser_user_data_dir, exist_ok=True)
+                        
                         self.browser.save_cookies(cookie_file)
                         logger.info(f"登录状态已保存到: {cookie_file}")
+                        
+                        # 验证Cookie文件是否创建成功
+                        if os.path.exists(cookie_file):
+                            file_size = os.path.getsize(cookie_file)
+                            logger.info(f"Cookie文件大小: {file_size} 字节")
+                        else:
+                            logger.warning("Cookie文件未成功创建")
                     except Exception as e:
                         logger.warning(f"保存Cookie失败: {e}")
                     
+                    logger.info("登录流程完成")
                     return
                 else:
                     logger.debug(f"等待登录中... ({elapsed_time}/{max_wait_time}秒)")
@@ -204,8 +358,9 @@ class WangWangRPA:
                 logger.debug(f"检查登录状态时出错: {e}")
         
         # 超时仍未登录
-        logger.warning(f"等待登录超时（{max_wait_time}秒），请重新启动系统")
-        raise WangWangRPAException("等待用户登录超时")
+        error_msg = f"等待登录超时（{max_wait_time}秒）"
+        logger.error(error_msg)
+        raise WangWangRPAException(error_msg)
     
     def run(self) -> None:
         """运行RPA系统主循环。
