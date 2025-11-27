@@ -7,6 +7,7 @@
 """
 
 import argparse
+import sys
 import threading
 import time
 from datetime import datetime
@@ -17,6 +18,7 @@ from flask_cors import CORS
 
 from src.rpa import WangWangRPA
 from src.utils.logger import setup_logging, get_logger
+from src.utils.cookie_parser import parse_cookie_string, validate_cookies
 
 # 初始化日志
 setup_logging()
@@ -53,8 +55,19 @@ def start_rpa():
     Request Body:
         {
             "config_path": "config/config.yaml",  # 可选，配置文件路径
-            "headless": false  # 可选，是否使用无头模式
+            "headless": false,  # 可选，是否使用无头模式
+            "cookies": [  # 可选，手动配置的Cookie列表（字典格式）
+                {
+                    "name": "_tb_token_",
+                    "value": "xxx",
+                    "domain": ".1688.com"
+                }
+            ],
+            "cookie_string": "cookie2=xxx; t=yyy; _tb_token_=zzz"  # 可选，Cookie字符串格式
         }
+    
+    Request Headers:
+        Cookie: cookie2=xxx; t=yyy; _tb_token_=zzz  # 可选，从请求头中读取Cookie
     
     Returns:
         JSON响应,包含启动结果
@@ -72,11 +85,55 @@ def start_rpa():
         data = request.get_json() or {}
         config_path = data.get('config_path', 'config/config.yaml')
         headless = data.get('headless', False)
+        cookies = data.get('cookies', None)
+        cookie_string = data.get('cookie_string', None)
 
         logger.info(f"启动RPA系统 - 配置: {config_path}, 无头模式: {headless}")
+        
+        # 优先级：cookies > cookie_string > 请求头Cookie
+        if cookies is None:
+            # 尝试从cookie_string解析
+            if cookie_string:
+                try:
+                    logger.info("从cookie_string参数解析Cookie")
+                    cookies = parse_cookie_string(cookie_string)
+                except Exception as e:
+                    return jsonify({
+                        "success": False,
+                        "message": f"解析cookie_string失败: {str(e)}",
+                        "error_type": "invalid_cookie_string"
+                    }), 400
+            # 尝试从请求头解析
+            elif 'Cookie' in request.headers:
+                try:
+                    cookie_header = request.headers.get('Cookie')
+                    logger.info("从请求头Cookie解析")
+                    cookies = parse_cookie_string(cookie_header)
+                except Exception as e:
+                    return jsonify({
+                        "success": False,
+                        "message": f"解析请求头Cookie失败: {str(e)}",
+                        "error_type": "invalid_cookie_header"
+                    }), 400
+        
+        # 验证Cookie格式
+        if cookies is not None:
+            if not isinstance(cookies, list):
+                return jsonify({
+                    "success": False,
+                    "message": "cookies参数必须是一个列表",
+                    "error_type": "invalid_parameter"
+                }), 400
+            
+            logger.info(f"使用手动配置的Cookie（共 {len(cookies)} 个）")
+            
+            # 验证Cookie有效性
+            if not validate_cookies(cookies):
+                logger.warning("Cookie验证失败，但仍会尝试使用")
+                # 不阻止启动，只是警告
 
         # 初始化RPA实例
-        rpa_instance = WangWangRPA(config_path=config_path)
+        rpa_instance = WangWangRPA(config_path=config_path, cookies=cookies)
 
         if headless:
             rpa_instance.config.browser_headless = True
@@ -541,15 +598,22 @@ def parse_arguments():
         help="API服务监听地址（默认: 0.0.0.0）"
     )
 
+    parser.add_argument(
+        "--cookies",
+        type=str,
+        help="手动配置Cookie（JSON格式字符串或文件路径，配合 --auto-start 使用）"
+    )
+
     return parser.parse_args()
 
 
-def auto_start_rpa_system(config_path: str, headless: bool):
+def auto_start_rpa_system(config_path: str, headless: bool, cookies: Optional[list] = None):
     """自动启动RPA系统。
     
     Args:
         config_path: 配置文件路径
         headless: 是否使用无头模式
+        cookies: 可选的Cookie列表
     """
     global rpa_instance, rpa_thread, is_running
 
@@ -560,7 +624,7 @@ def auto_start_rpa_system(config_path: str, headless: bool):
         print("=" * 60)
 
         # 初始化RPA实例
-        rpa_instance = WangWangRPA(config_path=config_path)
+        rpa_instance = WangWangRPA(config_path=config_path, cookies=cookies)
 
         if headless:
             rpa_instance.config.browser_headless = True
@@ -610,12 +674,43 @@ def main():
         print(f"模式: 集成模式(API + RPA)")
         print(f"配置文件: {args.config}")
         print(f"无头模式: {'是' if args.headless else '否'}")
+        
+        # 解析Cookie参数
+        cookies = None
+        if args.cookies:
+            try:
+                import json
+                import os
+                
+                # 检查是否是文件路径
+                if os.path.isfile(args.cookies):
+                    logger.info(f"从文件加载Cookie: {args.cookies}")
+                    with open(args.cookies, 'r', encoding='utf-8') as f:
+                        cookies = json.load(f)
+                else:
+                    # 尝试解析为JSON字符串
+                    logger.info("解析Cookie JSON字符串")
+                    cookies = json.loads(args.cookies)
+                
+                if not isinstance(cookies, list):
+                    print("❌ 错误: Cookie格式不正确，必须是一个列表")
+                    sys.exit(1)
+                
+                print(f"使用手动配置的Cookie（共 {len(cookies)} 个）")
+                
+            except json.JSONDecodeError as e:
+                print(f"❌ 错误: Cookie JSON格式不正确: {e}")
+                sys.exit(1)
+            except Exception as e:
+                print(f"❌ 错误: 加载Cookie失败: {e}")
+                sys.exit(1)
+        
         print("=" * 60)
 
         # 延迟启动RPA，让Flask先初始化
         def delayed_start():
             time.sleep(2)  # 等待Flask启动
-            auto_start_rpa_system(args.config, args.headless)
+            auto_start_rpa_system(args.config, args.headless, cookies)
 
         threading.Thread(target=delayed_start, daemon=True).start()
     else:

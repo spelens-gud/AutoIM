@@ -15,6 +15,7 @@ from selenium.webdriver.remote.webelement import WebElement
 
 from src.core.browser_controller import BrowserController
 from src.models.message import Message
+from src.utils.captcha_handler import CaptchaHandler
 from src.utils.exceptions import MessageException
 from src.utils.logger import get_logger
 
@@ -39,6 +40,7 @@ class MessageHandler:
         """
         self.browser = browser
         self.processed_message_ids: Set[str] = set()
+        self.captcha_handler = CaptchaHandler(browser)
 
         logger.info("消息处理器初始化完成")
 
@@ -53,46 +55,28 @@ class MessageHandler:
         Raises:
             MessageException: 当检查消息失败时抛出
         """
-        try:
-            logger.debug("检查新消息...")
+        logger.debug("检查新消息...")
 
-            # 获取当前页面的消息元素列表
-            message_elements = self.get_message_list()
+        # 获取当前页面的消息元素列表
+        message_elements = self.get_message_list()
 
-            if not message_elements:
-                logger.debug("未找到消息元素")
-                return []
+        if not message_elements:
+            logger.debug("未找到消息元素")
+            return []
 
-            new_messages = []
+        new_messages = []
 
-            # 解析每个消息元素
-            for element in message_elements:
-                try:
-                    message = self.parse_message_element(element)
+        # 解析每个消息元素
+        for element in message_elements:
+            message = self.parse_message_element(element)
 
-                    # 检查是否已处理过该消息
-                    if message.message_id not in self.processed_message_ids:
-                        new_messages.append(message)
-                        self.processed_message_ids.add(message.message_id)
-                        logger.info(
-                            f"发现新消息 - ID: {message.message_id}, "
-                            f"来自: {message.contact_name}, 内容: {message.content[:20]}..."
-                        )
-                except Exception as e:
-                    logger.warning(f"解析消息元素失败: {str(e)}")
-                    continue
-
-            if new_messages:
-                logger.info(f"检查到 {len(new_messages)} 条新消息")
+            # 检查是否已处理过该消息
+            if message.message_id not in self.processed_message_ids:
+                new_messages.append(message)
+                self.processed_message_ids.add(message.message_id)
             else:
-                logger.debug("没有新消息")
-
-            return new_messages
-
-        except Exception as e:
-            error_msg = f"检查新消息失败: {str(e)}"
-            logger.error(error_msg)
-            raise MessageException(error_msg) from e
+                continue
+        return new_messages
 
     def get_message_list(self) -> List[WebElement]:
         """获取当前页面的消息元素列表。
@@ -133,8 +117,7 @@ class MessageHandler:
             logger.error(error_msg)
             raise MessageException(error_msg) from e
 
-    @staticmethod
-    def parse_message_element(element: WebElement) -> Message:
+    def parse_message_element(self, element: WebElement) -> Message:
         """从DOM元素中提取消息信息。
         
         解析消息元素，提取消息内容、发送者、时间戳、类型等信息。
@@ -841,20 +824,17 @@ class MessageHandler:
                     time.sleep(retry_delay)
 
                 iframe_switched = False
-                try:
-                    self.browser.driver.switch_to.default_content()
+                self.browser.driver.switch_to.default_content()
 
-                    iframe_selector = "iframe[src*='def_cbu_web_im_core']"
+                iframe_selector = "iframe[src*='def_cbu_web_im_core']"
 
-                    chat_iframe = self.browser.wait_for_element(iframe_selector, timeout=5)
+                chat_iframe = self.browser.wait_for_element(iframe_selector, timeout=5)
 
-                    if chat_iframe:
-                        self.browser.driver.switch_to.frame(chat_iframe)
-                        iframe_switched = True
-                    else:
-                        logger.warning("未找到聊天iframe，尝试在主文档中查找输入框")
-                except Exception as e:
-                    logger.warning(f"切换到iframe失败: {e}，尝试在主文档中查找")
+                if chat_iframe:
+                    self.browser.driver.switch_to.frame(chat_iframe)
+                    iframe_switched = True
+                else:
+                    logger.warning("未找到聊天iframe，尝试在主文档中查找输入框")
 
                 if not iframe_switched:
                     logger.error("未能切换到聊天iframe，消息发送可能失败")
@@ -863,12 +843,25 @@ class MessageHandler:
                 logger.debug("切换到目标联系人...")
                 if not self.switch_to_chat(contact_id):
                     logger.warning(f"无法切换到联系人 {contact_id} 的聊天窗口")
-                    if attempt == 0:
-                        logger.info("尝试调试联系人列表结构...")
-                        self.debug_contact_list()
+                    # if attempt == 0:
+                    # logger.info("尝试调试联系人列表结构...")
+                    # self.debug_contact_list()
                 else:
                     logger.info(f"✓ 已切换到联系人 {contact_id}")
-                    # 等待聊天界面加载
+
+                time.sleep(1)
+
+                # 检测并处理滑动验证码
+                if self.captcha_handler.detect_slider_captcha():
+                    logger.warning("检测到滑动验证码，开始处理...")
+                    if not self.captcha_handler.handle_slider_captcha():
+                        logger.error("滑动验证码处理失败")
+                        if attempt < retry_times:
+                            continue
+                        else:
+                            self.browser.driver.switch_to.default_content()
+                            raise MessageException("滑动验证码处理失败，无法发送消息")
+                    logger.info("✓ 滑动验证码处理成功")
                     time.sleep(1)
 
                 input_selectors = [
@@ -999,6 +992,24 @@ class MessageHandler:
                     input_element.send_keys(Keys.RETURN)
                 else:
                     send_button.click()
+
+                # 等待一下，检查是否出现验证码
+                time.sleep(1)
+
+                # 检测并处理发送后可能出现的验证码
+                if self.captcha_handler.detect_slider_captcha():
+                    logger.warning("发送消息后出现滑动验证码，开始处理...")
+                    if not self.captcha_handler.handle_slider_captcha():
+                        logger.error("滑动验证码处理失败")
+                        if attempt < retry_times:
+                            self.browser.driver.switch_to.default_content()
+                            continue
+                        else:
+                            self.browser.driver.switch_to.default_content()
+                            raise MessageException("滑动验证码处理失败，消息可能未发送成功")
+                    logger.info("✓ 滑动验证码处理成功")
+                    time.sleep(1)
+
                 logger.info(f"✓ 消息发送成功: {content[:50]}...")
 
                 self.browser.driver.switch_to.default_content()

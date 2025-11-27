@@ -345,6 +345,196 @@ class BrowserController:
             logger.error(error_msg)
             raise BrowserException(error_msg) from e
 
+    def load_cookies_via_cdp(self, cookies: List[dict]) -> None:
+        """使用 Chrome DevTools Protocol 加载 Cookie。
+        
+        CDP 方式比 add_cookie 更可靠，可以在任何时候设置任何域名的 Cookie。
+        
+        Args:
+            cookies: Cookie字典列表
+            
+        Raises:
+            BrowserException: 当浏览器未启动或加载失败时抛出
+        """
+        if not self.driver:
+            raise BrowserException("浏览器未启动，无法加载Cookie")
+
+        try:
+            logger.info(f"使用 CDP 加载 {len(cookies)} 个 Cookie")
+
+            success_count = 0
+            fail_count = 0
+
+            for cookie in cookies:
+                try:
+                    # 检查Cookie是否有必需的字段
+                    if 'name' not in cookie or 'value' not in cookie:
+                        logger.warning(f"Cookie缺少必需字段: {cookie}")
+                        fail_count += 1
+                        continue
+
+                    # 确保Cookie有domain字段
+                    if 'domain' not in cookie:
+                        cookie['domain'] = '.1688.com'
+                    
+                    # 使用 CDP 命令设置 Cookie
+                    self.driver.execute_cdp_cmd('Network.setCookie', {
+                        'name': cookie['name'],
+                        'value': cookie['value'],
+                        'domain': cookie['domain'],
+                        'path': cookie.get('path', '/'),
+                        'secure': cookie.get('secure', True),
+                        'httpOnly': cookie.get('httpOnly', False),
+                    })
+                    success_count += 1
+                    logger.debug(f"✓ 成功添加Cookie: {cookie.get('name')} (domain: {cookie.get('domain')})")
+                except Exception as e:
+                    fail_count += 1
+                    logger.debug(f"✗ 添加Cookie失败: {cookie.get('name', 'unknown')} - {str(e)}")
+
+            logger.info(f"CDP Cookie加载完成 - 成功: {success_count}, 失败: {fail_count}, 总数: {len(cookies)}")
+
+        except Exception as e:
+            error_msg = f"使用CDP加载Cookie失败: {str(e)}"
+            logger.error(error_msg)
+            raise BrowserException(error_msg) from e
+
+    def load_cookies_from_dict(self, cookies: List[dict]) -> None:
+        """从字典列表加载Cookie到浏览器。
+        
+        用于手动配置Cookie恢复登录状态。
+        由于Selenium的限制，需要先访问对应的域名才能设置该域名的Cookie。
+        
+        Args:
+            cookies: Cookie字典列表，每个字典至少包含 name 和 value 字段
+            
+        Raises:
+            BrowserException: 当浏览器未启动或加载失败时抛出
+            
+        Examples:
+            >>> cookies = [
+            ...     {"name": "_tb_token_", "value": "xxx", "domain": ".1688.com"},
+            ...     {"name": "cookie2", "value": "yyy", "domain": ".1688.com"}
+            ... ]
+            >>> browser.load_cookies_from_dict(cookies)
+        """
+        if not self.driver:
+            raise BrowserException("浏览器未启动，无法加载Cookie")
+
+        try:
+            logger.info(f"从字典加载 {len(cookies)} 个Cookie")
+
+            # 按域名分组Cookie
+            cookies_by_domain = {}
+            for cookie in cookies:
+                # 检查Cookie是否有必需的字段
+                if 'name' not in cookie or 'value' not in cookie:
+                    logger.warning(f"Cookie缺少必需字段: {cookie}")
+                    continue
+
+                # 确保Cookie有domain字段
+                if 'domain' not in cookie:
+                    cookie['domain'] = '.1688.com'
+                
+                # 确保Cookie有path字段
+                if 'path' not in cookie:
+                    cookie['path'] = '/'
+                
+                domain = cookie['domain']
+                if domain not in cookies_by_domain:
+                    cookies_by_domain[domain] = []
+                cookies_by_domain[domain].append(cookie)
+            
+            logger.info(f"Cookie按域名分组: {list(cookies_by_domain.keys())}")
+            
+            # 统计成功和失败的Cookie数量
+            total_success = 0
+            total_fail = 0
+            
+            # 为每个域名访问对应的页面并设置Cookie
+            domain_url_mapping = {
+                '.1688.com': 'https://www.1688.com',
+                '1688.com': 'https://www.1688.com',
+                '.taobao.com': 'https://www.taobao.com',
+                'taobao.com': 'https://www.taobao.com',
+                '.alibaba.com': 'https://www.alibaba.com',
+                'alibaba.com': 'https://www.alibaba.com',
+            }
+            
+            for domain, domain_cookies in cookies_by_domain.items():
+                # 找到对应的URL
+                url = None
+                for domain_pattern, domain_url in domain_url_mapping.items():
+                    if domain_pattern in domain:
+                        url = domain_url
+                        break
+                
+                if not url:
+                    # 尝试构造URL
+                    clean_domain = domain.lstrip('.')
+                    url = f"https://{clean_domain}"
+                
+                try:
+                    logger.info(f"访问 {url} 以设置 {len(domain_cookies)} 个 {domain} 域名的Cookie")
+                    self.driver.get(url)
+                    
+                    # 等待页面加载
+                    import time
+                    time.sleep(1)
+                    
+                    # 添加该域名的所有Cookie
+                    success_count = 0
+                    fail_count = 0
+                    
+                    for cookie in domain_cookies:
+                        try:
+                            # Selenium对Cookie域名有严格要求
+                            # 如果当前在 www.1688.com，可以设置 .1688.com 或 www.1688.com 的Cookie
+                            # 但需要确保域名格式正确
+                            
+                            # 创建Cookie副本以避免修改原始数据
+                            cookie_to_add = cookie.copy()
+                            
+                            # 如果域名以点开头，Selenium可能会拒绝
+                            # 尝试移除前导点
+                            if cookie_to_add['domain'].startswith('.'):
+                                # 先尝试不带点的域名
+                                cookie_to_add['domain'] = cookie_to_add['domain'].lstrip('.')
+                            
+                            self.driver.add_cookie(cookie_to_add)
+                            success_count += 1
+                            logger.debug(f"✓ 成功添加Cookie: {cookie.get('name')} (domain: {cookie_to_add['domain']})")
+                        except Exception as e:
+                            # 如果失败，尝试使用原始域名（带点）
+                            try:
+                                self.driver.add_cookie(cookie)
+                                success_count += 1
+                                logger.debug(f"✓ 成功添加Cookie（第二次尝试）: {cookie.get('name')} (domain: {cookie['domain']})")
+                            except Exception as e2:
+                                fail_count += 1
+                                # 打印第一个失败的Cookie的详细错误信息
+                                if fail_count == 1:
+                                    logger.warning(f"✗ 添加Cookie失败示例: {cookie.get('name')} (domain: {cookie['domain']})")
+                                    logger.warning(f"   Cookie内容: {cookie}")
+                                    logger.warning(f"   错误信息: {str(e2)}")
+                                else:
+                                    logger.debug(f"✗ 添加Cookie失败: {cookie.get('name')} (domain: {cookie['domain']}) - {str(e2)}")
+                    
+                    total_success += success_count
+                    total_fail += fail_count
+                    logger.info(f"{domain} 域名Cookie加载完成 - 成功: {success_count}, 失败: {fail_count}")
+                    
+                except Exception as e:
+                    logger.warning(f"访问 {url} 失败: {str(e)}")
+                    total_fail += len(domain_cookies)
+            
+            logger.info(f"所有Cookie加载完成 - 总成功: {total_success}, 总失败: {total_fail}, 总数: {len(cookies)}")
+
+        except Exception as e:
+            error_msg = f"从字典加载Cookie失败: {str(e)}"
+            logger.error(error_msg)
+            raise BrowserException(error_msg) from e
+
     def is_logged_in(self) -> bool:
         """检查当前是否已登录。
         

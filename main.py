@@ -59,6 +59,14 @@ def parse_arguments():
     )
 
     parser.add_argument(
+        "--cookies",
+        type=str,
+        help="手动配置Cookie（JSON格式字符串或文件路径）。"
+             "示例: --cookies '[{\"name\":\"_tb_token_\",\"value\":\"xxx\",\"domain\":\".1688.com\"}]' "
+             "或 --cookies cookies.json"
+    )
+
+    parser.add_argument(
         "--version",
         action="version",
         version="旺旺RPA系统 v1.0.0"
@@ -120,11 +128,44 @@ def main():
     logger.info(f"配置文件: {args.config}")
     logger.info(f"无头模式: {'是' if args.headless else '否'}")
 
+    # 解析Cookie参数
+    cookies = None
+    if args.cookies:
+        try:
+            import json
+            import os
+            
+            # 检查是否是文件路径
+            if os.path.isfile(args.cookies):
+                logger.info(f"从文件加载Cookie: {args.cookies}")
+                with open(args.cookies, 'r', encoding='utf-8') as f:
+                    cookies = json.load(f)
+            else:
+                # 尝试解析为JSON字符串
+                logger.info("解析Cookie JSON字符串")
+                cookies = json.loads(args.cookies)
+            
+            if not isinstance(cookies, list):
+                logger.error("Cookie必须是一个列表")
+                print("❌ 错误: Cookie格式不正确，必须是一个列表")
+                sys.exit(1)
+            
+            logger.info(f"成功解析 {len(cookies)} 个Cookie")
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Cookie JSON解析失败: {e}")
+            print(f"❌ 错误: Cookie JSON格式不正确: {e}")
+            sys.exit(1)
+        except Exception as e:
+            logger.error(f"加载Cookie失败: {e}")
+            print(f"❌ 错误: 加载Cookie失败: {e}")
+            sys.exit(1)
+
     rpa = None
 
     try:
         # 初始化RPA控制器
-        rpa = WangWangRPA(config_path=args.config)
+        rpa = WangWangRPA(config_path=args.config, cookies=cookies)
 
         # 如果命令行指定了无头模式，覆盖配置文件设置
         if args.headless:

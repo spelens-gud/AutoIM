@@ -36,13 +36,16 @@ class WangWangRPA:
         is_running: 系统运行状态标志
     """
     
-    def __init__(self, config_path: str = "config/config.yaml"):
+    def __init__(self, config_path: str = "config/config.yaml", cookies: Optional[list] = None):
         """初始化RPA主控制器。
         
         加载配置并初始化各个组件。
         
         Args:
             config_path: 配置文件路径
+            cookies: 可选的Cookie列表，用于手动配置登录状态。
+                    每个Cookie应为字典，至少包含 name 和 value 字段。
+                    示例: [{"name": "_tb_token_", "value": "xxx", "domain": ".1688.com"}]
             
         Raises:
             WangWangRPAException: 初始化失败时抛出
@@ -78,6 +81,9 @@ class WangWangRPA:
             
             # 运行状态标志
             self.is_running = False
+            
+            # 保存手动配置的Cookie
+            self.manual_cookies = cookies
             
             # 注册信号处理器，用于优雅退出（仅在主线程中注册）
             try:
@@ -135,13 +141,52 @@ class WangWangRPA:
             # 等待页面加载
             time.sleep(2)
             
-            # 尝试加载已保存的Cookie
-            cookie_file = f"{self.config.browser_user_data_dir}/cookies.pkl"
+            # 优先使用手动配置的Cookie
             cookie_loaded_successfully = False
-            
-            # 检查Cookie文件是否存在
             import os
-            if os.path.exists(cookie_file):
+            
+            if self.manual_cookies:
+                try:
+                    logger.info(f"使用手动配置的Cookie（共 {len(self.manual_cookies)} 个）")
+                    
+                    # 使用 CDP 方式加载 Cookie（更可靠）
+                    try:
+                        self.browser.load_cookies_via_cdp(self.manual_cookies)
+                        logger.info("使用 CDP 方式加载 Cookie 成功")
+                    except Exception as cdp_error:
+                        logger.warning(f"CDP 方式失败，尝试传统方式: {cdp_error}")
+                        self.browser.load_cookies_from_dict(self.manual_cookies)
+                    
+                    logger.info("手动配置的Cookie已加载到浏览器")
+                    
+                    # 导航到1688首页以应用Cookie
+                    logger.info("导航到1688首页以应用Cookie...")
+                    self.browser.navigate_to(self.config.wangwang_home_url)
+                    time.sleep(3)  # 等待页面加载
+                    
+                    # 检查登录状态
+                    logger.info("验证Cookie是否有效...")
+                    if self.browser.is_logged_in():
+                        logger.info("✓ 手动配置的Cookie有效，已自动登录1688账号")
+                        cookie_loaded_successfully = True
+                        
+                        # 保存有效的Cookie到文件，方便下次使用
+                        try:
+                            cookie_file = f"{self.config.browser_user_data_dir}/cookies.pkl"
+                            os.makedirs(self.config.browser_user_data_dir, exist_ok=True)
+                            self.browser.save_cookies(cookie_file)
+                            logger.info(f"已将有效的Cookie保存到: {cookie_file}")
+                        except Exception as e:
+                            logger.warning(f"保存Cookie到文件失败: {e}")
+                    else:
+                        logger.warning("✗ 手动配置的Cookie已过期或无效，需要重新登录")
+                        
+                except Exception as e:
+                    logger.warning(f"加载手动配置的Cookie时出错: {e}")
+            
+            # 如果没有手动配置Cookie或手动Cookie无效，尝试从文件加载
+            cookie_file = f"{self.config.browser_user_data_dir}/cookies.pkl"
+            if not cookie_loaded_successfully and os.path.exists(cookie_file):
                 try:
                     logger.info(f"发现已保存的Cookie文件: {cookie_file}")
                     
