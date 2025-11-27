@@ -238,7 +238,6 @@ class MessageHandler:
                 message_type=message_type,
                 timestamp=timestamp,
                 is_sent=is_sent,
-                is_auto_reply=False,
             )
 
             logger.debug(f"成功解析消息: {message.message_id}")
@@ -701,7 +700,7 @@ class MessageHandler:
                 self.browser.driver.switch_to.default_content()
                 iframe_selector = "iframe[src*='def_cbu_web_im_core']"
                 chat_iframe = self.browser.wait_for_element(iframe_selector, timeout=5)
-                
+
                 if chat_iframe:
                     self.browser.driver.switch_to.frame(chat_iframe)
                     logger.debug("✓ 成功切换到聊天iframe")
@@ -733,7 +732,7 @@ class MessageHandler:
                     "[class*='chat-content']",
                     ".chat-content",
                 ]
-                
+
                 message_container = None
                 for selector in message_container_selectors:
                     try:
@@ -744,12 +743,12 @@ class MessageHandler:
                             break
                     except Exception:
                         continue
-                
+
                 # 滚动到顶部加载历史消息
                 if message_container:
                     for _ in range(3):  # 滚动3次尝试加载更多历史消息
                         self.browser.driver.execute_script(
-                            "arguments[0].scrollTop = 0;", 
+                            "arguments[0].scrollTop = 0;",
                             message_container
                         )
                         time.sleep(1)
@@ -760,7 +759,7 @@ class MessageHandler:
             # 获取所有消息元素
             logger.debug("获取消息元素...")
             message_elements = []
-            
+
             # 尝试多个可能的消息选择器
             message_selectors = [
                 ".message-item",
@@ -770,14 +769,14 @@ class MessageHandler:
                 ".message",
                 "[class*='message']",
             ]
-            
+
             for selector in message_selectors:
                 try:
                     elements = self.browser.find_elements(selector)
                     if elements:
                         # 过滤掉非消息元素（如系统提示等）
                         message_elements = [
-                            elem for elem in elements 
+                            elem for elem in elements
                             if elem.is_displayed()
                         ]
                         if message_elements:
@@ -794,13 +793,14 @@ class MessageHandler:
 
             # 限制消息数量
             if len(message_elements) > max_messages:
-                logger.debug(f"消息数量 ({len(message_elements)}) 超过限制 ({max_messages})，只获取最新的 {max_messages} 条")
+                logger.debug(
+                    f"消息数量 ({len(message_elements)}) 超过限制 ({max_messages})，只获取最新的 {max_messages} 条")
                 message_elements = message_elements[-max_messages:]
 
             # 解析每个消息元素
             messages = []
             logger.debug(f"开始解析 {len(message_elements)} 条消息...")
-            
+
             for idx, element in enumerate(message_elements):
                 try:
                     message = self._parse_chat_message_element(element, contact_id)
@@ -820,13 +820,13 @@ class MessageHandler:
         except Exception as e:
             error_msg = f"获取聊天消息失败: {str(e)}"
             logger.error(error_msg)
-            
+
             # 确保切换回主文档
             try:
                 self.browser.driver.switch_to.default_content()
             except Exception:
                 pass
-            
+
             raise MessageException(error_msg) from e
 
     def _parse_chat_message_element(self, element: WebElement, contact_id: str) -> Message:
@@ -878,11 +878,11 @@ class MessageHandler:
             # 判断是否为发送的消息
             is_sent = False
             element_class = element.get_attribute("class") or ""
-            
+
             # 通过CSS类名判断消息方向
             sent_keywords = ["sent", "self", "own", "outgoing", "right", "me"]
             received_keywords = ["received", "other", "incoming", "left"]
-            
+
             element_class_lower = element_class.lower()
             if any(keyword in element_class_lower for keyword in sent_keywords):
                 is_sent = True
@@ -894,7 +894,7 @@ class MessageHandler:
                     # 检查元素的对齐方式
                     text_align = element.value_of_css_property("text-align")
                     float_prop = element.value_of_css_property("float")
-                    
+
                     if text_align == "right" or float_prop == "right":
                         is_sent = True
                 except Exception:
@@ -909,7 +909,7 @@ class MessageHandler:
                 # 接收的消息，发送者是联系人
                 contact_name = contact_id
                 sender_id = contact_id
-                
+
                 # 尝试从元素中提取发送者名称
                 sender_selectors = [
                     ".sender-name",
@@ -919,7 +919,7 @@ class MessageHandler:
                     "[class*='username']",
                     "[class*='name']",
                 ]
-                
+
                 for selector in sender_selectors:
                     try:
                         sender_element = element.find_element("css selector", selector)
@@ -971,7 +971,6 @@ class MessageHandler:
                 message_type=message_type,
                 timestamp=timestamp,
                 is_sent=is_sent,
-                is_auto_reply=False,
             )
 
             return message
@@ -1014,40 +1013,31 @@ class MessageHandler:
                     logger.warning(f"第 {attempt} 次重试发送消息...")
                     time.sleep(retry_delay)
 
-                # 关键修复：先切换到聊天iframe
-                logger.debug("步骤1: 切换到聊天iframe...")
                 iframe_switched = False
                 try:
-                    # 先切换回主文档
                     self.browser.driver.switch_to.default_content()
-                    logger.debug("已切换回主文档")
 
-                    # 查找聊天iframe - 根据DOM结构，使用精确选择器
                     iframe_selector = "iframe[src*='def_cbu_web_im_core']"
-                    logger.debug(f"查找iframe: {iframe_selector}")
-                    
+
                     chat_iframe = self.browser.wait_for_element(iframe_selector, timeout=5)
 
                     if chat_iframe:
                         iframe_src = chat_iframe.get_attribute("src")
-                        logger.debug(f"找到聊天iframe: {iframe_src}")
-                        
+
                         self.browser.driver.switch_to.frame(chat_iframe)
                         iframe_switched = True
-                        logger.info("✓ 成功切换到聊天iframe")
                         time.sleep(2)  # 等待iframe内容加载
-                        
+
                         # 验证是否真的切换成功
                         try:
                             current_url = self.browser.driver.execute_script("return window.location.href;")
-                            logger.debug(f"当前iframe URL: {current_url}")
                         except Exception as e:
                             logger.debug(f"无法获取iframe URL: {str(e)}")
                     else:
                         logger.warning("未找到聊天iframe，尝试在主文档中查找输入框")
                 except Exception as e:
                     logger.warning(f"切换到iframe失败: {str(e)}，尝试在主文档中查找")
-                    
+
                 if not iframe_switched:
                     logger.error("未能切换到聊天iframe，消息发送可能失败")
                     # 切换回主文档
@@ -1057,7 +1047,6 @@ class MessageHandler:
                         pass
                     raise MessageException("无法切换到聊天iframe")
 
-                # 步骤2: 切换到目标联系人（这会加载聊天界面和输入框）
                 logger.debug("步骤2: 切换到目标联系人...")
                 if not self.switch_to_chat(contact_id):
                     logger.warning(f"无法切换到联系人 {contact_id} 的聊天窗口")
@@ -1071,9 +1060,8 @@ class MessageHandler:
 
                 # 步骤3: 定位输入框 - 精确定位消息输入框，排除搜索框
                 logger.info("步骤3: 查找消息输入框...")
-                
+
                 # 搜索框特征：placeholder="搜索联系人"
-                # 消息输入框特征：可能是 textarea、input 或 contenteditable div
                 input_selectors = [
                     # 优先查找 textarea（最常见）
                     "textarea",
@@ -1096,7 +1084,7 @@ class MessageHandler:
                     # 最后尝试所有 text input（会过滤）
                     "input[type='text']",
                 ]
-                
+
                 # 搜索框关键字（用于排除）
                 search_keywords = ["搜索", "联系人", "你好", "在吗", "search", "contact"]
 
@@ -1104,8 +1092,7 @@ class MessageHandler:
                 for selector in input_selectors:
                     try:
                         elements = self.browser.find_elements(selector)
-                        logger.debug(f"选择器 '{selector}' 找到 {len(elements)} 个元素")
-                        
+
                         for idx, elem in enumerate(elements):
                             try:
                                 is_displayed = elem.is_displayed()
@@ -1114,26 +1101,22 @@ class MessageHandler:
                                 elem_class = elem.get_attribute("class") or ""
                                 elem_id = elem.get_attribute("id") or ""
                                 placeholder = elem.get_attribute("placeholder") or ""
-                                
-                                logger.debug(f"  元素[{idx}]: tag={tag_name}, placeholder='{placeholder[:50]}', displayed={is_displayed}, enabled={is_enabled}")
-                                
-                                # 排除搜索框
+
                                 is_search_box = any(kw in placeholder for kw in search_keywords)
                                 if is_search_box:
-                                    logger.debug(f"  元素[{idx}] 是搜索框（placeholder包含搜索关键字），跳过")
                                     continue
-                                
+
                                 # 优先选择明确的消息输入框
                                 if is_displayed and is_enabled:
-                                    if "请输入消息" in placeholder or ("Enter" in placeholder and "发送" in placeholder):
+                                    if "请输入消息" in placeholder or (
+                                            "Enter" in placeholder and "发送" in placeholder):
                                         input_element = elem
-                                        logger.info(f"✓ 找到消息输入框: placeholder='{placeholder}'")
                                         break
                                     elif not input_element:
                                         # 暂存作为候选
                                         input_element = elem
                                         logger.debug(f"  暂存元素[{idx}]作为候选")
-                                        
+
                             except Exception as e:
                                 logger.debug(f"  元素[{idx}] 检查失败: {str(e)}")
                                 continue
@@ -1145,71 +1128,13 @@ class MessageHandler:
                                 logger.info("✓ 确认找到消息输入框，停止搜索")
                                 break
                     except Exception as e:
-                        logger.debug(f"选择器 '{selector}' 查找失败: {str(e)}")
                         continue
 
-                if not input_element:
-                    logger.error("未找到任何可用的消息输入框")
-                    # 详细调试：打印所有输入元素
                     try:
-                        all_inputs = self.browser.find_elements("input")
-                        all_textareas = self.browser.find_elements("textarea")
-                        all_contenteditable = self.browser.find_elements("div[contenteditable='true']")
-                        
-                        logger.error(f"iframe内共有: {len(all_inputs)} 个 input, {len(all_textareas)} 个 textarea, {len(all_contenteditable)} 个 contenteditable")
-                        
-                        logger.error("=== 所有 input 元素详情 ===")
-                        for i, inp in enumerate(all_inputs[:15]):
-                            try:
-                                ph = inp.get_attribute("placeholder") or ""
-                                vis = inp.is_displayed()
-                                enabled = inp.is_enabled()
-                                inp_type = inp.get_attribute("type") or ""
-                                inp_class = inp.get_attribute("class") or ""
-                                logger.error(f"  input[{i}]: type='{inp_type}', placeholder='{ph}', class='{inp_class[:40]}', visible={vis}, enabled={enabled}")
-                            except Exception as e:
-                                logger.error(f"  input[{i}]: 无法获取信息 - {str(e)}")
-                        
-                        if all_textareas:
-                            logger.error("=== 所有 textarea 元素详情 ===")
-                            for i, ta in enumerate(all_textareas[:10]):
-                                try:
-                                    ph = ta.get_attribute("placeholder") or ""
-                                    vis = ta.is_displayed()
-                                    enabled = ta.is_enabled()
-                                    ta_class = ta.get_attribute("class") or ""
-                                    logger.error(f"  textarea[{i}]: placeholder='{ph}', class='{ta_class[:40]}', visible={vis}, enabled={enabled}")
-                                except Exception as e:
-                                    logger.error(f"  textarea[{i}]: 无法获取信息 - {str(e)}")
-                        
-                        if all_contenteditable:
-                            logger.error("=== 所有 contenteditable 元素详情 ===")
-                            for i, ce in enumerate(all_contenteditable[:10]):
-                                try:
-                                    vis = ce.is_displayed()
-                                    enabled = ce.is_enabled()
-                                    ce_class = ce.get_attribute("class") or ""
-                                    logger.error(f"  contenteditable[{i}]: class='{ce_class[:40]}', visible={vis}, enabled={enabled}")
-                                except Exception as e:
-                                    logger.error(f"  contenteditable[{i}]: 无法获取信息 - {str(e)}")
-                    except Exception as e:
-                        logger.error(f"调试信息获取失败: {str(e)}")
-                    
-                    
-                    # 尝试等待更长时间后再次查找
-                    logger.warning("未找到输入框，等待5秒后重试...")
-                    time.sleep(5)
-                    
-                    # 重试：查找所有可能的输入元素
-                    try:
-                        logger.info("重试：查找所有输入元素...")
                         all_inputs = self.browser.find_elements("input")
                         all_textareas = self.browser.find_elements("textarea")
                         all_contenteditable = self.browser.find_elements("[contenteditable='true']")
-                        
-                        logger.info(f"重试发现: {len(all_inputs)} 个 input, {len(all_textareas)} 个 textarea, {len(all_contenteditable)} 个 contenteditable")
-                        
-                        # 打印所有元素详情
+
                         for i, elem in enumerate(all_inputs + all_textareas + all_contenteditable):
                             try:
                                 tag = elem.tag_name
@@ -1217,35 +1142,31 @@ class MessageHandler:
                                 cls = elem.get_attribute("class") or ""
                                 vis = elem.is_displayed()
                                 ena = elem.is_enabled()
-                                logger.info(f"  [{i}] {tag}: placeholder='{ph}', class='{cls[:30]}', visible={vis}, enabled={ena}")
-                                
+                                logger.info(
+                                    f"  [{i}] {tag}: placeholder='{ph}', class='{cls[:30]}', visible={vis}, enabled={ena}")
+
                                 # 尝试使用这个元素
                                 if vis and ena:
                                     # 排除搜索框
-                                    if not any(kw in ph for kw in search_keywords) and not any(kw in cls.lower() for kw in ["search"]):
+                                    if not any(kw in ph for kw in search_keywords) and not any(
+                                            kw in cls.lower() for kw in ["search"]):
                                         input_element = elem
-                                        logger.info(f"✓ 重试成功，使用元素[{i}]: {tag}, placeholder='{ph}'")
                                         break
                             except Exception as e:
                                 logger.debug(f"  [{i}] 检查失败: {str(e)}")
                                 continue
                     except Exception as e:
                         logger.error(f"重试失败: {str(e)}")
-                    
+
                     if not input_element:
                         # 切换回主文档
                         self.browser.driver.switch_to.default_content()
                         raise MessageException("未找到消息输入框，请查看日志中的调试信息")
 
-                # 清空输入框并输入消息内容
-                logger.debug("清空输入框...")
-                
                 # 获取输入框类型
                 tag_name = input_element.tag_name.lower()
                 is_contenteditable = input_element.get_attribute("contenteditable") == "true"
-                
-                logger.debug(f"输入框类型: {tag_name}, contenteditable: {is_contenteditable}")
-                
+
                 # 清空输入框
                 try:
                     if is_contenteditable:
@@ -1258,34 +1179,32 @@ class MessageHandler:
                 except Exception as e:
                     logger.warning(f"清空输入框失败: {str(e)}")
 
-                time.sleep(0.3)
+                time.sleep(1)
 
-                logger.debug(f"输入消息内容: {content[:50]}...")
-                
                 # 尝试多种输入方式
                 input_success = False
-                
+
                 # 方式1: 使用 send_keys
                 try:
                     input_element.click()  # 先点击获得焦点
                     time.sleep(0.3)
                     input_element.send_keys(content)
-                    
+
                     # 验证内容是否输入成功
                     time.sleep(0.5)
                     if is_contenteditable:
                         current_value = input_element.text or input_element.get_attribute("textContent") or ""
                     else:
                         current_value = input_element.get_attribute("value") or ""
-                    
+
                     logger.debug(f"输入后的内容: {current_value[:50]}...")
-                    
+
                     if content in current_value or current_value.strip():
                         input_success = True
                         logger.debug("✓ 方式1 (send_keys) 输入成功")
                 except Exception as e:
                     logger.warning(f"方式1 (send_keys) 输入失败: {str(e)}")
-                
+
                 # 方式2: 如果方式1失败，使用JavaScript直接设置值
                 if not input_success:
                     try:
@@ -1293,8 +1212,8 @@ class MessageHandler:
                         if is_contenteditable:
                             # contenteditable使用innerHTML或textContent
                             self.browser.driver.execute_script(
-                                "arguments[0].textContent = arguments[1];", 
-                                input_element, 
+                                "arguments[0].textContent = arguments[1];",
+                                input_element,
                                 content
                             )
                             # 触发input事件
@@ -1305,8 +1224,8 @@ class MessageHandler:
                         else:
                             # 普通输入框使用value
                             self.browser.driver.execute_script(
-                                "arguments[0].value = arguments[1];", 
-                                input_element, 
+                                "arguments[0].value = arguments[1];",
+                                input_element,
                                 content
                             )
                             # 触发input和change事件
@@ -1315,22 +1234,22 @@ class MessageHandler:
                                 "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));",
                                 input_element
                             )
-                        
+
                         # 验证内容
                         time.sleep(0.5)
                         if is_contenteditable:
                             current_value = input_element.text or input_element.get_attribute("textContent") or ""
                         else:
                             current_value = input_element.get_attribute("value") or ""
-                        
+
                         logger.debug(f"JavaScript设置后的内容: {current_value[:50]}...")
-                        
+
                         if content in current_value or current_value.strip():
                             input_success = True
                             logger.debug("✓ 方式2 (JavaScript) 输入成功")
                     except Exception as e:
                         logger.warning(f"方式2 (JavaScript) 输入失败: {str(e)}")
-                
+
                 # 方式3: 如果前两种方式都失败，尝试组合方式
                 if not input_success:
                     try:
@@ -1338,11 +1257,11 @@ class MessageHandler:
                         # 先点击并聚焦
                         input_element.click()
                         time.sleep(0.2)
-                        
+
                         # 使用JavaScript设置焦点
                         self.browser.driver.execute_script("arguments[0].focus();", input_element)
                         time.sleep(0.2)
-                        
+
                         # 使用JavaScript设置值
                         if is_contenteditable:
                             self.browser.driver.execute_script(
@@ -1357,7 +1276,7 @@ class MessageHandler:
                                 input_element,
                                 content
                             )
-                        
+
                         # 触发多个事件确保框架检测到变化
                         self.browser.driver.execute_script("""
                             var element = arguments[0];
@@ -1367,22 +1286,22 @@ class MessageHandler:
                             element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
                             element.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
                         """, input_element)
-                        
+
                         # 验证内容
                         time.sleep(0.5)
                         if is_contenteditable:
                             current_value = input_element.text or input_element.get_attribute("textContent") or ""
                         else:
                             current_value = input_element.get_attribute("value") or ""
-                        
+
                         logger.debug(f"组合方式设置后的内容: {current_value[:50]}...")
-                        
+
                         if content in current_value or current_value.strip():
                             input_success = True
                             logger.debug("✓ 方式3 (组合方式) 输入成功")
                     except Exception as e:
                         logger.warning(f"方式3 (组合方式) 输入失败: {str(e)}")
-                
+
                 if not input_success:
                     logger.error("所有输入方式都失败，内容可能为空")
                     # 切换回主文档

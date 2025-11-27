@@ -12,7 +12,6 @@ from typing import Optional
 from src.core.browser_controller import BrowserController
 from src.core.message_handler import MessageHandler
 from src.core.session_manager import SessionManager
-from src.core.auto_reply_engine import AutoReplyEngine
 from src.utils.config_manager import ConfigManager
 from src.models.config import Config
 from src.models.session import Session
@@ -34,7 +33,6 @@ class WangWangRPA:
         browser: 浏览器控制器
         message_handler: 消息处理器
         session_manager: 会话管理器
-        auto_reply_engine: 自动回复引擎
         is_running: 系统运行状态标志
     """
     
@@ -77,23 +75,6 @@ class WangWangRPA:
             logger.info("正在初始化会话管理器...")
             self.session_manager = SessionManager()
             logger.info("会话管理器初始化完成")
-            
-            # 初始化自动回复引擎
-            if self.config.auto_reply_enabled:
-                logger.info("正在初始化自动回复引擎...")
-                self.auto_reply_engine = AutoReplyEngine(
-                    self.config.auto_reply_rules_file
-                )
-                try:
-                    self.auto_reply_engine.load_rules()
-                    logger.info(f"自动回复引擎初始化完成，加载了 {self.auto_reply_engine.get_rules_count()} 条规则")
-                except Exception as e:
-                    logger.warning(f"加载自动回复规则失败: {e}，自动回复功能将被禁用")
-                    self.config.auto_reply_enabled = False
-                    self.auto_reply_engine = None
-            else:
-                logger.info("自动回复功能已禁用")
-                self.auto_reply_engine = None
             
             # 运行状态标志
             self.is_running = False
@@ -374,7 +355,6 @@ class WangWangRPA:
         logger.info("=" * 60)
         logger.info("开始监控旺旺消息")
         logger.info(f"检查间隔: {self.config.check_interval}秒")
-        logger.info(f"自动回复: {'启用' if self.config.auto_reply_enabled else '禁用'}")
         logger.info("按 Ctrl+C 停止监控")
         logger.info("=" * 60)
         
@@ -478,35 +458,8 @@ class WangWangRPA:
             self.session_manager.add_session(session)
             logger.info(f"创建新会话: {message.contact_name}")
         
-        # 尝试自动回复
-        if self.config.auto_reply_enabled and self.auto_reply_engine:
-            try:
-                reply_content = self.auto_reply_engine.match_rule(message.content)
-                
-                if reply_content:
-                    logger.info(f"匹配到自动回复规则，准备发送回复...")
-                    
-                    # 发送自动回复
-                    success = self.message_handler.send_message(
-                        contact_id=message.contact_id,
-                        content=reply_content,
-                        retry_times=self.config.retry_times,
-                        retry_delay=self.config.retry_delay
-                    )
-                    
-                    if success:
-                        logger.info(f"自动回复发送成功: {reply_content[:50]}...")
-                        # 更新会话活跃时间
-                        self.session_manager.update_session_activity(message.contact_id)
-                    else:
-                        logger.warning("自动回复发送失败")
-                else:
-                    logger.info("消息未匹配任何自动回复规则，标记为待人工处理")
-                    
-            except Exception as e:
-                logger.error(f"自动回复处理失败: {str(e)}")
-        else:
-            logger.debug("自动回复功能未启用，消息标记为待人工处理")
+        # 记录消息，标记为待人工处理
+        logger.info(f"消息已记录，等待人工处理: {message.content[:50]}...")
     
     def stop(self) -> None:
         """停止RPA系统并清理资源。
@@ -544,8 +497,6 @@ class WangWangRPA:
         """
         return {
             "is_running": self.is_running,
-            "auto_reply_enabled": self.config.auto_reply_enabled,
             "total_sessions": self.session_manager.get_session_count() if self.session_manager else 0,
             "active_sessions": len(self.session_manager.get_active_sessions()) if self.session_manager else 0,
-            "auto_reply_rules": self.auto_reply_engine.get_rules_count() if self.auto_reply_engine else 0,
         }

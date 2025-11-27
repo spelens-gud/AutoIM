@@ -130,8 +130,7 @@ def start_rpa():
             "message": "RPA系统启动成功",
             "config": {
                 "config_path": config_path,
-                "headless": headless,
-                "auto_reply_enabled": rpa_instance.config.auto_reply_enabled
+                "headless": headless
             }
         })
 
@@ -324,8 +323,7 @@ def check_messages():
                 "content": msg.content,
                 "message_type": msg.message_type,
                 "timestamp": msg.timestamp.isoformat(),
-                "is_sent": msg.is_sent,
-                "is_auto_reply": msg.is_auto_reply
+                "is_sent": msg.is_sent
             })
 
         return jsonify({
@@ -394,8 +392,7 @@ def get_chat_history(contact_id):
                 "content": msg.content,
                 "message_type": msg.message_type,
                 "timestamp": msg.timestamp.isoformat(),
-                "is_sent": msg.is_sent,
-                "is_auto_reply": msg.is_auto_reply
+                "is_sent": msg.is_sent
             })
 
         return jsonify({
@@ -469,117 +466,6 @@ def list_sessions():
         return jsonify({
             "success": False,
             "message": f"获取会话列表失败: {str(e)}"
-        }), 500
-
-
-@app.route('/api/auto-reply/rules', methods=['GET'])
-def get_auto_reply_rules():
-    """获取自动回复规则列表。
-    
-    Returns:
-        JSON响应，包含规则列表
-    """
-    global rpa_instance
-
-    try:
-        if not rpa_instance or not rpa_instance.auto_reply_engine:
-            return jsonify({
-                "success": False,
-                "message": "自动回复引擎未启用"
-            }), 400
-
-        logger.debug("获取自动回复规则")
-
-        # 获取规则列表
-        rules = rpa_instance.auto_reply_engine.get_all_rules()
-
-        # 转换为字典格式
-        rules_data = []
-        for rule in rules:
-            rules_data.append({
-                "name": rule.name,
-                "keywords": rule.keywords,
-                "reply": rule.reply,
-                "match_type": rule.match_type,
-                "priority": rule.priority,
-                "enabled": rule.enabled
-            })
-
-        return jsonify({
-            "success": True,
-            "data": {
-                "count": len(rules_data),
-                "rules": rules_data
-            }
-        })
-
-    except Exception as e:
-        logger.error(f"获取自动回复规则失败: {str(e)}")
-        return jsonify({
-            "success": False,
-            "message": f"获取规则失败: {str(e)}"
-        }), 500
-
-
-@app.route('/api/auto-reply/test', methods=['POST'])
-def test_auto_reply():
-    """测试自动回复规则匹配。
-    
-    Request Body:
-        {
-            "message": "测试消息内容"
-        }
-    
-    Returns:
-        JSON响应，包含匹配结果
-    """
-    global rpa_instance
-
-    try:
-        if not rpa_instance or not rpa_instance.auto_reply_engine:
-            return jsonify({
-                "success": False,
-                "message": "自动回复引擎未启用"
-            }), 400
-
-        # 获取请求参数
-        data = request.get_json()
-        if not data or 'message' not in data:
-            return jsonify({
-                "success": False,
-                "message": "缺少必需参数: message"
-            }), 400
-
-        message = data['message']
-
-        logger.debug(f"测试自动回复匹配: {message}")
-
-        # 测试匹配
-        reply = rpa_instance.auto_reply_engine.match_rule(message)
-
-        if reply:
-            return jsonify({
-                "success": True,
-                "data": {
-                    "matched": True,
-                    "reply": reply,
-                    "message": message
-                }
-            })
-        else:
-            return jsonify({
-                "success": True,
-                "data": {
-                    "matched": False,
-                    "message": message
-                }
-            })
-
-    except Exception as e:
-        logger.error(f"测试自动回复失败: {str(e)}")
-        return jsonify({
-            "success": False,
-            "message": f"测试失败: {str(e)}"
         }), 500
 
 

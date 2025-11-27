@@ -71,8 +71,6 @@ class ConfigManager:
                 retry_times=config_data.get('message', {}).get('retry_times', 2),
                 retry_delay=config_data.get('message', {}).get('retry_delay', 1),
                 session_timeout=config_data.get('session', {}).get('inactive_timeout', 1800),
-                auto_reply_enabled=config_data.get('auto_reply', {}).get('enabled', True),
-                auto_reply_rules_file=config_data.get('auto_reply', {}).get('rules_file', 'config/auto_reply_rules.yaml'),
                 log_level=config_data.get('logging', {}).get('level', 'INFO'),
                 log_file=config_data.get('logging', {}).get('file', 'logs/wangwang_rpa.log'),
                 log_max_bytes=config_data.get('logging', {}).get('max_bytes', 10485760),
@@ -166,10 +164,6 @@ class ConfigManager:
             },
             'session': {
                 'inactive_timeout': 1800
-            },
-            'auto_reply': {
-                'enabled': True,
-                'rules_file': 'config/auto_reply_rules.yaml'
             },
             'logging': {
                 'level': 'INFO',

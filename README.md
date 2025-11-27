@@ -5,7 +5,6 @@
 ## 功能特性
 
 - 🤖 **自动消息监控**：实时监控 1688 旺旺消息，每3秒检查一次新消息
-- 💬 **智能自动回复**：基于关键词匹配规则，自动回复常见问题
 - 📊 **会话管理**：管理多个聊天会话，跟踪会话状态和活跃度
 - 🔐 **登录状态保持**：通过浏览器数据目录持久化登录状态，无需重复登录
 - 📝 **完整日志记录**：记录所有关键操作和错误信息，便于问题排查
@@ -169,11 +168,6 @@ message:
 session:
   inactive_timeout: 1800       # 会话超时时间（秒，默认30分钟）
 
-# 自动回复配置
-auto_reply:
-  enabled: true                # 是否启用自动回复
-  rules_file: "config/auto_reply_rules.yaml"  # 回复规则文件路径
-
 # 日志配置
 logging:
   level: "INFO"                # 日志级别：DEBUG, INFO, WARNING, ERROR
@@ -181,53 +175,6 @@ logging:
   max_bytes: 10485760          # 单个日志文件最大大小（10MB）
   backup_count: 5              # 保留的日志文件数量
 ```
-
-### 自动回复规则配置
-
-自动回复规则文件位于 `config/auto_reply_rules.yaml`，用于配置关键词匹配和自动回复内容：
-
-```yaml
-rules:
-  # 价格咨询
-  - keywords: ["价格", "多少钱", "报价", "批发价"]
-    reply: "您好，具体价格请查看商品详情页。批量采购可享受更优惠价格，欢迎咨询。"
-  
-  # 起订量问题
-  - keywords: ["起订", "最少", "起批", "多少起"]
-    reply: "您好，商品详情页有标注起订量信息。大批量采购可以联系我们获取更优惠的价格。"
-  
-  # 发货咨询
-  - keywords: ["发货", "什么时候发", "几天发货"]
-    reply: "您好，现货一般48小时内发货，定制产品根据数量3-7天发货，具体请咨询客服。"
-  
-  # 样品问题
-  - keywords: ["样品", "打样", "寄样"]
-    reply: "您好，我们支持寄送样品，样品费用和运费请联系客服确认。批量采购可退还样品费。"
-  
-  # 定制问题
-  - keywords: ["定制", "定做", "OEM"]
-    reply: "您好，我们支持定制服务，可根据您的需求定制产品。具体定制方案和价格请联系客服详谈。"
-```
-
-#### 规则配置说明
-
-- **keywords**：关键词列表，消息中包含任一关键词即匹配
-- **reply**：匹配成功后自动发送的回复内容
-- 规则按顺序匹配，返回第一个匹配的回复
-- 不匹配任何规则的消息会被标记为需要人工处理
-
-#### 添加自定义规则
-
-1. 打开 `config/auto_reply_rules.yaml` 文件
-2. 按照上述格式添加新的规则
-3. 保存文件后重启系统即可生效
-
-示例：
-
-```yaml
-rules:
-  # 添加新规则 - 合作方式
-  - keywords: ["合作", "代理", "加盟", "经销"]
     reply: "您好，我们欢迎各地客户合作。关于代理加盟政策，请联系我们的商务经理详谈。"
 ```
 
@@ -239,21 +186,18 @@ wangwang-rpa/
 │   ├── core/                  # 核心功能模块
 │   │   ├── browser_controller.py    # 浏览器控制器
 │   │   ├── message_handler.py       # 消息处理器
-│   │   ├── session_manager.py       # 会话管理器
-│   │   └── auto_reply_engine.py     # 自动回复引擎
+│   │   └── session_manager.py       # 会话管理器
 │   ├── models/                # 数据模型
 │   │   ├── message.py         # 消息模型
 │   │   ├── session.py         # 会话模型
-│   │   ├── config.py          # 配置模型
-│   │   └── auto_reply_rule.py # 自动回复规则模型
+│   │   └── config.py          # 配置模型
 │   ├── utils/                 # 工具模块
 │   │   ├── config_manager.py  # 配置管理器
 │   │   ├── logger.py          # 日志工具
 │   │   └── exceptions.py      # 异常定义
 │   └── rpa.py                 # RPA主控制器
 ├── config/                    # 配置文件目录
-│   ├── config.yaml            # 系统配置
-│   └── auto_reply_rules.yaml  # 自动回复规则
+│   └── config.yaml            # 系统配置
 ├── logs/                      # 日志文件目录
 ├── tests/                     # 测试文件
 ├── main.py                    # 程序入口
@@ -413,14 +357,6 @@ python debug_contact.py
 - 系统会自动重试2次
 
 ### 4. 自动回复不生效
-
-**问题**：配置了规则但没有自动回复
-
-**解决方案**：
-- 检查 `config/config.yaml` 中 `auto_reply.enabled` 是否为 `true`
-- 确认 `auto_reply_rules.yaml` 文件格式正确
-- 检查关键词是否匹配（区分大小写）
-- 查看日志确认规则是否加载成功
 
 ### 5. 登录后出现 404 错误页面
 

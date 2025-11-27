@@ -48,8 +48,7 @@
   "message": "RPA系统启动成功",
   "config": {
     "config_path": "config/config.yaml",
-    "headless": false,
-    "auto_reply_enabled": true
+    "headless": false
   }
 }
 ```
@@ -96,10 +95,8 @@ curl -X POST http://localhost:5000/api/rpa/stop
   "success": true,
   "data": {
     "is_running": true,
-    "auto_reply_enabled": true,
     "total_sessions": 5,
-    "active_sessions": 3,
-    "auto_reply_rules": 14
+    "active_sessions": 3
   }
 }
 ```
@@ -172,8 +169,7 @@ curl -X POST http://localhost:5000/api/message/send \
         "content": "您好，有货的",
         "message_type": "text",
         "timestamp": "2025-11-26T19:00:00",
-        "is_sent": false,
-        "is_auto_reply": false
+        "is_sent": false
       }
     ]
   }
@@ -214,8 +210,7 @@ curl http://localhost:5000/api/message/check
         "content": "你好，请问有货吗？",
         "message_type": "text",
         "timestamp": "2025-11-26T18:50:00",
-        "is_sent": true,
-        "is_auto_reply": false
+        "is_sent": true
       },
       {
         "message_id": "msg_002",
@@ -224,8 +219,7 @@ curl http://localhost:5000/api/message/check
         "content": "您好，有货的",
         "message_type": "text",
         "timestamp": "2025-11-26T18:51:00",
-        "is_sent": false,
-        "is_auto_reply": false
+        "is_sent": false
       }
     ]
   }
@@ -293,71 +287,6 @@ curl http://localhost:5000/api/session/list?active_only=true
 ---
 
 ### 8. 获取自动回复规则
-
-获取所有自动回复规则。
-
-**接口**: `GET /api/auto-reply/rules`
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "count": 14,
-    "rules": [
-      {
-        "name": "价格咨询",
-        "keywords": ["价格", "多少钱", "报价"],
-        "reply": "您好，具体价格请查看商品详情页，或联系客服获取优惠报价。",
-        "match_type": "any",
-        "priority": 10,
-        "enabled": true
-      }
-    ]
-  }
-}
-```
-
-**curl 示例**:
-```bash
-curl http://localhost:5000/api/auto-reply/rules
-```
-
----
-
-### 9. 测试自动回复
-
-测试消息是否匹配自动回复规则。
-
-**接口**: `POST /api/auto-reply/test`
-
-**请求体**:
-```json
-{
-  "message": "这个多少钱？"
-}
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "matched": true,
-    "reply": "您好，具体价格请查看商品详情页，或联系客服获取优惠报价。",
-    "message": "这个多少钱？"
-  }
-}
-```
-
-**curl 示例**:
-```bash
-curl -X POST http://localhost:5000/api/auto-reply/test \
-  -H "Content-Type: application/json" \
-  -d '{"message": "这个多少钱？"}'
-```
-
----
 
 ## 错误响应
 

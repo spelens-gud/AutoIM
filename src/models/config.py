@@ -20,8 +20,6 @@ class Config:
         retry_times: 消息发送重试次数
         retry_delay: 重试延迟时间（秒）
         session_timeout: 会话超时时间（秒）
-        auto_reply_enabled: 是否启用自动回复
-        auto_reply_rules_file: 自动回复规则文件路径
         log_level: 日志级别
         log_file: 日志文件路径
         log_max_bytes: 日志文件最大字节数
@@ -37,8 +35,6 @@ class Config:
     retry_times: int
     retry_delay: int
     session_timeout: int
-    auto_reply_enabled: bool
-    auto_reply_rules_file: str
     log_level: str
     log_file: str
     log_max_bytes: int

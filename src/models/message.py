@@ -19,7 +19,6 @@ class Message:
         message_type: 消息类型（text/image/system）
         timestamp: 消息时间戳
         is_sent: 是否为发送的消息（True表示发送，False表示接收）
-        is_auto_reply: 是否为自动回复消息
     """
     
     message_id: str
@@ -29,7 +28,6 @@ class Message:
     message_type: str  # "text", "image", "system"
     timestamp: datetime
     is_sent: bool
-    is_auto_reply: bool = False
     
     def __post_init__(self):
         """验证消息类型的有效性。"""
