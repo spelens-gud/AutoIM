@@ -133,7 +133,8 @@ class MessageHandler:
             logger.error(error_msg)
             raise MessageException(error_msg) from e
 
-    def parse_message_element(self, element: WebElement) -> Message:
+    @staticmethod
+    def parse_message_element(element: WebElement) -> Message:
         """从DOM元素中提取消息信息。
         
         解析消息元素，提取消息内容、发送者、时间戳、类型等信息。
@@ -423,14 +424,14 @@ class MessageHandler:
             MessageException: 当切换失败时抛出
         """
         try:
-            logger.info(f"切换到联系人聊天窗口: {contact_id}")
+            # logger.info(f"切换到联系人聊天窗口: {contact_id}")
 
             # 等待页面加载完成 - 旺旺是SPA应用，需要等待
-            logger.debug("等待联系人列表加载...")
-            time.sleep(3)  # 增加等待时间，确保页面完全加载
+            # logger.debug("等待联系人列表加载...")
+            # time.sleep(3)  # 增加等待时间，确保页面完全加载
 
             # 首先尝试切换到iframe（如果存在）
-            logger.debug("检查是否需要切换到iframe...")
+            # logger.debug("检查是否需要切换到iframe...")
             try:
                 iframes = self.browser.find_elements("iframe")
                 for iframe in iframes:
@@ -444,70 +445,18 @@ class MessageHandler:
             except Exception as e:
                 logger.debug(f"切换iframe失败或不需要切换: {str(e)}")
 
-            # 策略1: 使用更精确的 XPath 直接定位
-            # 实际DOM: <div class="conversation-item"><div class="content"><div class="conversation"><div class="name">富友1688</div></div></div></div>
-            logger.debug(f"策略1: 使用精确XPath直接定位联系人")
-            try:
-                # 使用 XPath 查找包含指定文本的 .name 元素，然后找到其祖先 .conversation-item
-                xpath = f"//div[@class='conversation-item']//div[@class='name' and normalize-space(text())='{contact_id}']"
-
-                # 等待元素出现
-                max_wait = 15  # 增加等待时间
-                wait_interval = 1
-                name_elements = []
-
-                for i in range(max_wait):
-                    name_elements = self.browser.find_elements(xpath, by="xpath")
-                    if name_elements:
-                        logger.debug(f"找到 {len(name_elements)} 个匹配的联系人")
-                        break
-                    logger.debug(f"等待联系人元素出现... ({i + 1}/{max_wait})")
-                    time.sleep(wait_interval)
-
-                if name_elements:
-                    # 找到 .name 元素的祖先 .conversation-item 并点击
-                    name_element = name_elements[0]
-                    # 使用 XPath 向上查找 .conversation-item
-                    conversation_item = name_element.find_element("xpath",
-                                                                  "./ancestor::div[@class='conversation-item' or contains(@class, 'conversation-item')]")
-
-                    logger.info(f"✓ 找到联系人元素: {contact_id}")
-
-                    # 滚动到元素可见
-                    self.browser.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});",
-                                                       conversation_item)
-                    time.sleep(0.5)
-
-                    # 点击会话项
-                    conversation_item.click()
-                    logger.info(f"✓ 成功切换到联系人 {contact_id}")
-                    time.sleep(1)
-                    return True
-                else:
-                    logger.warning(f"未找到联系人: {contact_id}")
-
-            except Exception as e:
-                logger.debug(f"策略1失败: {str(e)}")
-
-            # 策略2: 遍历所有 conversation-item 查找匹配的联系人
             logger.debug(f"策略2: 遍历所有会话项查找联系人")
             try:
                 conversation_items = self.browser.find_elements(".conversation-item")
 
                 if conversation_items:
-                    logger.debug(f"找到 {len(conversation_items)} 个会话项，开始遍历...")
-
                     for idx, item in enumerate(conversation_items):
                         try:
                             # 使用 XPath 在当前 item 下查找 .name 元素
                             name_element = item.find_element("xpath", ".//div[@class='name']")
                             name_text = name_element.text.strip()
 
-                            logger.debug(f"  [{idx + 1}] 联系人: {name_text}")
-
                             if name_text == contact_id:
-                                logger.info(f"✓ 找到匹配的联系人: {name_text}")
-
                                 # 滚动到元素可见
                                 self.browser.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});",
                                                                    item)
@@ -516,7 +465,7 @@ class MessageHandler:
                                 # 点击整个会话项
                                 item.click()
                                 logger.info(f"✓ 成功切换到联系人 {contact_id}")
-                                time.sleep(1)
+                                # time.sleep(1)
                                 return True
                         except NoSuchElementException:
                             logger.debug(f"  [{idx + 1}] 未找到 .name 元素")
@@ -533,127 +482,7 @@ class MessageHandler:
             except Exception as e:
                 logger.debug(f"策略2失败: {str(e)}")
 
-            # 策略3: 通过 ID 属性查找（根据你提供的 DOM，ID 包含联系人信息）
-            logger.debug(f"策略3: 通过 ID 属性查找")
-            try:
-                # 你的 DOM 显示 id="2847488761.1-2081385427.1#11152@cntaobao"
-                # 尝试通过 ID 包含联系人名称来查找
-                all_items = self.browser.find_elements(".conversation-item")
-
-                for item in all_items:
-                    try:
-                        item_id = item.get_attribute("id")
-                        if item_id:
-                            logger.debug(f"检查会话项 ID: {item_id}")
-                            # 检查 ID 中是否包含联系人信息
-                            # 或者直接点击并检查内容
-                            name_element = item.find_element("xpath", ".//div[@class='name']")
-                            name_text = name_element.text.strip()
-
-                            if name_text == contact_id:
-                                logger.info(f"✓ 通过 ID 属性找到联系人: {name_text} (ID: {item_id})")
-
-                                # 滚动到元素可见
-                                self.browser.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});",
-                                                                   item)
-                                time.sleep(0.5)
-
-                                item.click()
-                                logger.info(f"✓ 成功切换到联系人 {contact_id}")
-                                time.sleep(1)
-                                return True
-                    except Exception as e:
-                        continue
-
-            except Exception as e:
-                logger.debug(f"策略3失败: {str(e)}")
-
-            # 策略4: 通过部分文本匹配（模糊匹配）
-            logger.debug(f"策略4: 通过部分文本匹配查找")
-            try:
-                xpath = f"//div[@class='name' and contains(text(), '{contact_id}')]"
-                name_elements = self.browser.find_elements(xpath, by="xpath")
-
-                if name_elements:
-                    logger.debug(f"找到 {len(name_elements)} 个部分匹配的元素")
-                    name_element = name_elements[0]
-                    conversation_item = name_element.find_element("xpath",
-                                                                  "./ancestor::div[@class='conversation-item' or contains(@class, 'conversation-item')]")
-
-                    # 滚动到元素可见
-                    self.browser.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});",
-                                                       conversation_item)
-                    time.sleep(0.5)
-
-                    conversation_item.click()
-                    logger.info(f"✓ 通过部分匹配成功切换到联系人")
-                    time.sleep(1)
-                    return True
-            except Exception as e:
-                logger.debug(f"策略4失败: {str(e)}")
-
-            # 策略5: 尝试通过data属性定位联系人（兼容其他可能的DOM结构）
-            logger.debug(f"策略5: 通过data属性查找")
-            data_selectors = [
-                f"[data-contact-id='{contact_id}']",
-                f"[data-user-id='{contact_id}']",
-                f"[data-id='{contact_id}']",
-                f"[data-userid='{contact_id}']",
-                f"[data-nick='{contact_id}']",
-            ]
-
-            for selector in data_selectors:
-                try:
-                    contact_element = self.browser.wait_for_element(selector, timeout=2)
-
-                    # 滚动到元素可见
-                    self.browser.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});",
-                                                       contact_element)
-                    time.sleep(0.5)
-
-                    contact_element.click()
-                    logger.info(f"✓ 通过选择器 '{selector}' 成功切换到联系人")
-                    time.sleep(1)
-                    return True
-                except Exception:
-                    continue
-
-            # 策略6: 通过通用选择器和文本匹配
-            logger.debug(f"策略6: 通过通用选择器查找")
-            generic_selectors = [
-                ".contact-item",
-                ".contact-list-item",
-                ".user-item",
-                "[class*='conversation']",
-                "[class*='contact']",
-                "li[class*='item']",
-            ]
-
-            for selector in generic_selectors:
-                try:
-                    elements = self.browser.find_elements(selector)
-                    if not elements:
-                        continue
-
-                    logger.debug(f"找到 {len(elements)} 个元素 (选择器: {selector})")
-
-                    for element in elements:
-                        try:
-                            element_text = element.text.strip()
-                            if contact_id in element_text:
-                                logger.debug(f"找到匹配的元素，文本: {element_text[:50]}")
-                                element.click()
-                                logger.info(f"✓ 通过通用选择器成功切换到联系人")
-                                time.sleep(1)
-                                return True
-                        except (StaleElementReferenceException, Exception):
-                            continue
-
-                except Exception:
-                    continue
-
             # 所有策略都失败
-            logger.warning(f"✗ 无法找到联系人 {contact_id}，所有查找策略均失败")
             logger.info("提示: 请确保联系人在当前页面可见，或者检查联系人ID/名称是否正确")
 
             # 切换回主文档
@@ -1004,8 +833,6 @@ class MessageHandler:
         Raises:
             MessageException: 当发送失败且重试次数用尽时抛出
         """
-        logger.info(f"准备发送消息到联系人 {contact_id}: {content[:50]}...")
-
         # 尝试发送消息，包含重试机制
         for attempt in range(retry_times + 1):
             try:
@@ -1022,66 +849,30 @@ class MessageHandler:
                     chat_iframe = self.browser.wait_for_element(iframe_selector, timeout=5)
 
                     if chat_iframe:
-                        iframe_src = chat_iframe.get_attribute("src")
-
                         self.browser.driver.switch_to.frame(chat_iframe)
                         iframe_switched = True
-                        time.sleep(2)  # 等待iframe内容加载
-
-                        # 验证是否真的切换成功
-                        try:
-                            current_url = self.browser.driver.execute_script("return window.location.href;")
-                        except Exception as e:
-                            logger.debug(f"无法获取iframe URL: {str(e)}")
                     else:
                         logger.warning("未找到聊天iframe，尝试在主文档中查找输入框")
                 except Exception as e:
-                    logger.warning(f"切换到iframe失败: {str(e)}，尝试在主文档中查找")
+                    logger.warning("切换到iframe失败: {}，尝试在主文档中查找", e)
 
                 if not iframe_switched:
                     logger.error("未能切换到聊天iframe，消息发送可能失败")
-                    # 切换回主文档
-                    try:
-                        self.browser.driver.switch_to.default_content()
-                    except:
-                        pass
-                    raise MessageException("无法切换到聊天iframe")
+                    self.browser.driver.switch_to.default_content()
 
-                logger.debug("步骤2: 切换到目标联系人...")
+                logger.debug("切换到目标联系人...")
                 if not self.switch_to_chat(contact_id):
-                    logger.warning(f"无法切换到联系人 {contact_id} 的聊天窗口")
+                    logger.warning("无法切换到联系人 {} 的聊天窗口".format(contact_id))
                     if attempt == 0:
                         logger.info("尝试调试联系人列表结构...")
                         self.debug_contact_list()
                 else:
-                    logger.info(f"✓ 已切换到联系人 {contact_id}")
+                    logger.info("✓ 已切换到联系人".format(contact_id))
                     # 等待聊天界面加载
-                    time.sleep(2)
+                    time.sleep(1)
 
-                # 步骤3: 定位输入框 - 精确定位消息输入框，排除搜索框
-                logger.info("步骤3: 查找消息输入框...")
-
-                # 搜索框特征：placeholder="搜索联系人"
                 input_selectors = [
-                    # 优先查找 textarea（最常见）
-                    "textarea",
-                    # contenteditable div（富文本编辑器）
-                    "div[contenteditable='true']",
-                    "div[contenteditable]",
                     "[contenteditable='true']",
-                    # 匹配消息相关的 placeholder
-                    "input[placeholder*='请输入']",
-                    "textarea[placeholder*='请输入']",
-                    "input[placeholder*='消息']",
-                    "textarea[placeholder*='消息']",
-                    "input[placeholder*='Enter']",
-                    "textarea[placeholder*='Enter']",
-                    # 通过 class 匹配
-                    "textarea[class*='input']",
-                    "div[class*='input'][contenteditable]",
-                    "textarea[class*='message']",
-                    "div[class*='message'][contenteditable]",
-                    # 最后尝试所有 text input（会过滤）
                     "input[type='text']",
                 ]
 
@@ -1097,9 +888,6 @@ class MessageHandler:
                             try:
                                 is_displayed = elem.is_displayed()
                                 is_enabled = elem.is_enabled()
-                                tag_name = elem.tag_name
-                                elem_class = elem.get_attribute("class") or ""
-                                elem_id = elem.get_attribute("id") or ""
                                 placeholder = elem.get_attribute("placeholder") or ""
 
                                 is_search_box = any(kw in placeholder for kw in search_keywords)
@@ -1115,10 +903,9 @@ class MessageHandler:
                                     elif not input_element:
                                         # 暂存作为候选
                                         input_element = elem
-                                        logger.debug(f"  暂存元素[{idx}]作为候选")
 
                             except Exception as e:
-                                logger.debug(f"  元素[{idx}] 检查失败: {str(e)}")
+                                logger.debug("  元素[{}] 检查失败: {}".format(idx, e))
                                 continue
 
                         # 如果找到了明确的消息输入框，停止搜索
@@ -1127,9 +914,8 @@ class MessageHandler:
                             if "请输入消息" in ph:
                                 logger.info("✓ 确认找到消息输入框，停止搜索")
                                 break
-                    except Exception as e:
+                    except Exception:
                         continue
-
                     try:
                         all_inputs = self.browser.find_elements("input")
                         all_textareas = self.browser.find_elements("textarea")
@@ -1137,15 +923,10 @@ class MessageHandler:
 
                         for i, elem in enumerate(all_inputs + all_textareas + all_contenteditable):
                             try:
-                                tag = elem.tag_name
                                 ph = elem.get_attribute("placeholder") or ""
                                 cls = elem.get_attribute("class") or ""
                                 vis = elem.is_displayed()
                                 ena = elem.is_enabled()
-                                logger.info(
-                                    f"  [{i}] {tag}: placeholder='{ph}', class='{cls[:30]}', visible={vis}, enabled={ena}")
-
-                                # 尝试使用这个元素
                                 if vis and ena:
                                     # 排除搜索框
                                     if not any(kw in ph for kw in search_keywords) and not any(
@@ -1153,38 +934,26 @@ class MessageHandler:
                                         input_element = elem
                                         break
                             except Exception as e:
-                                logger.debug(f"  [{i}] 检查失败: {str(e)}")
+                                logger.debug("  [{}] 检查失败: {}".format(i, e))
                                 continue
                     except Exception as e:
-                        logger.error(f"重试失败: {str(e)}")
+                        logger.error("重试失败: {}".format(e))
 
                     if not input_element:
-                        # 切换回主文档
                         self.browser.driver.switch_to.default_content()
                         raise MessageException("未找到消息输入框，请查看日志中的调试信息")
 
                 # 获取输入框类型
-                tag_name = input_element.tag_name.lower()
                 is_contenteditable = input_element.get_attribute("contenteditable") == "true"
 
-                # 清空输入框
-                try:
-                    if is_contenteditable:
-                        # contenteditable元素使用JavaScript清空
-                        self.browser.driver.execute_script("arguments[0].innerHTML = '';", input_element)
-                        self.browser.driver.execute_script("arguments[0].textContent = '';", input_element)
-                    else:
-                        # 普通输入框使用clear()
-                        input_element.clear()
-                except Exception as e:
-                    logger.warning(f"清空输入框失败: {str(e)}")
+                if is_contenteditable:
+                    self.browser.driver.execute_script("arguments[0].innerHTML = '';", input_element)
+                    self.browser.driver.execute_script("arguments[0].textContent = '';", input_element)
+                else:
+                    input_element.clear()
 
                 time.sleep(1)
 
-                # 尝试多种输入方式
-                input_success = False
-
-                # 方式1: 使用 send_keys
                 try:
                     input_element.click()  # 先点击获得焦点
                     time.sleep(0.3)
@@ -1203,115 +972,7 @@ class MessageHandler:
                         input_success = True
                         logger.debug("✓ 方式1 (send_keys) 输入成功")
                 except Exception as e:
-                    logger.warning(f"方式1 (send_keys) 输入失败: {str(e)}")
-
-                # 方式2: 如果方式1失败，使用JavaScript直接设置值
-                if not input_success:
-                    try:
-                        logger.debug("尝试方式2: 使用JavaScript设置内容")
-                        if is_contenteditable:
-                            # contenteditable使用innerHTML或textContent
-                            self.browser.driver.execute_script(
-                                "arguments[0].textContent = arguments[1];",
-                                input_element,
-                                content
-                            )
-                            # 触发input事件
-                            self.browser.driver.execute_script(
-                                "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
-                                input_element
-                            )
-                        else:
-                            # 普通输入框使用value
-                            self.browser.driver.execute_script(
-                                "arguments[0].value = arguments[1];",
-                                input_element,
-                                content
-                            )
-                            # 触发input和change事件
-                            self.browser.driver.execute_script(
-                                "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));"
-                                "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));",
-                                input_element
-                            )
-
-                        # 验证内容
-                        time.sleep(0.5)
-                        if is_contenteditable:
-                            current_value = input_element.text or input_element.get_attribute("textContent") or ""
-                        else:
-                            current_value = input_element.get_attribute("value") or ""
-
-                        logger.debug(f"JavaScript设置后的内容: {current_value[:50]}...")
-
-                        if content in current_value or current_value.strip():
-                            input_success = True
-                            logger.debug("✓ 方式2 (JavaScript) 输入成功")
-                    except Exception as e:
-                        logger.warning(f"方式2 (JavaScript) 输入失败: {str(e)}")
-
-                # 方式3: 如果前两种方式都失败，尝试组合方式
-                if not input_success:
-                    try:
-                        logger.debug("尝试方式3: 组合方式（点击+聚焦+JavaScript+事件）")
-                        # 先点击并聚焦
-                        input_element.click()
-                        time.sleep(0.2)
-
-                        # 使用JavaScript设置焦点
-                        self.browser.driver.execute_script("arguments[0].focus();", input_element)
-                        time.sleep(0.2)
-
-                        # 使用JavaScript设置值
-                        if is_contenteditable:
-                            self.browser.driver.execute_script(
-                                "arguments[0].innerHTML = arguments[1];"
-                                "arguments[0].textContent = arguments[1];",
-                                input_element,
-                                content
-                            )
-                        else:
-                            self.browser.driver.execute_script(
-                                "arguments[0].value = arguments[1];",
-                                input_element,
-                                content
-                            )
-
-                        # 触发多个事件确保框架检测到变化
-                        self.browser.driver.execute_script("""
-                            var element = arguments[0];
-                            element.dispatchEvent(new Event('focus', { bubbles: true }));
-                            element.dispatchEvent(new Event('input', { bubbles: true }));
-                            element.dispatchEvent(new Event('change', { bubbles: true }));
-                            element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
-                            element.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-                        """, input_element)
-
-                        # 验证内容
-                        time.sleep(0.5)
-                        if is_contenteditable:
-                            current_value = input_element.text or input_element.get_attribute("textContent") or ""
-                        else:
-                            current_value = input_element.get_attribute("value") or ""
-
-                        logger.debug(f"组合方式设置后的内容: {current_value[:50]}...")
-
-                        if content in current_value or current_value.strip():
-                            input_success = True
-                            logger.debug("✓ 方式3 (组合方式) 输入成功")
-                    except Exception as e:
-                        logger.warning(f"方式3 (组合方式) 输入失败: {str(e)}")
-
-                if not input_success:
-                    logger.error("所有输入方式都失败，内容可能为空")
-                    # 切换回主文档
-                    self.browser.driver.switch_to.default_content()
-                    raise MessageException("无法输入消息内容到输入框")
-
-                logger.debug("消息内容已成功输入")
-
-                # 等待更长时间确保内容输入完成并被框架识别
-                time.sleep(1)
+                    logger.warning(f"(send_keys) 输入失败: {str(e)}")
 
                 # 定位并点击发送按钮
                 send_button_selectors = [
@@ -1325,53 +986,27 @@ class MessageHandler:
 
                 send_button = None
                 for selector in send_button_selectors:
-                    try:
-                        elements = self.browser.find_elements(selector)
-                        for elem in elements:
-                            try:
-                                if elem.is_displayed() and elem.is_enabled():
-                                    send_button = elem
-                                    logger.debug(f"找到发送按钮: {selector}")
-                                    break
-                            except:
-                                continue
-
-                        if send_button:
+                    elements = self.browser.find_elements(selector)
+                    for elem in elements:
+                        if elem.is_displayed() and elem.is_enabled():
+                            send_button = elem
                             break
-                    except Exception as e:
-                        logger.debug(f"选择器 '{selector}' 未找到发送按钮: {str(e)}")
-                        continue
 
+                    if send_button:
+                        break
                 if not send_button:
-                    # 如果没有找到发送按钮，尝试使用回车键发送
-                    logger.debug("未找到发送按钮，尝试使用回车键发送")
                     from selenium.webdriver.common.keys import Keys
                     input_element.send_keys(Keys.RETURN)
                 else:
-                    # 点击发送按钮
-                    logger.debug("点击发送按钮...")
                     send_button.click()
+                logger.info("✓ 消息发送成功: {}...".format(content))
 
-                logger.info(f"✓ 消息发送成功: {content[:50]}...")
-
-                # 等待消息发送完成
-                time.sleep(1)
-
-                # 切换回主文档
                 self.browser.driver.switch_to.default_content()
 
                 return True
 
             except Exception as e:
-                logger.warning(f"发送消息失败 (尝试 {attempt + 1}/{retry_times + 1}): {str(e)}")
-
-                # 确保切换回主文档
-                try:
-                    self.browser.driver.switch_to.default_content()
-                except Exception:
-                    pass
-
-                # 如果是最后一次尝试，抛出异常
+                self.browser.driver.switch_to.default_content()
                 if attempt >= retry_times:
                     error_msg = f"发送消息失败，已重试 {retry_times} 次: {str(e)}"
                     logger.error(error_msg)

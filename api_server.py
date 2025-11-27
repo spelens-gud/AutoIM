@@ -366,7 +366,7 @@ def get_chat_history(contact_id):
 
         # 获取查询参数
         max_messages = request.args.get('max_messages', 100, type=int)
-        
+
         # 验证参数
         if max_messages < 1 or max_messages > 500:
             return jsonify({

@@ -3,33 +3,32 @@
 提供浏览器自动化控制功能，包括启动、关闭、导航、元素定位等操作。
 """
 
-import json
 import pickle
 from pathlib import Path
 from typing import List, Optional
 
 from selenium import webdriver
+from selenium.common.exceptions import (
+    TimeoutException,
+    NoSuchElementException,
+    WebDriverException,
+)
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import (
-    TimeoutException,
-    NoSuchElementException,
-    WebDriverException,
-)
 
 try:
     from webdriver_manager.chrome import ChromeDriverManager
+
     WEBDRIVER_MANAGER_AVAILABLE = True
 except ImportError:
     WEBDRIVER_MANAGER_AVAILABLE = False
 
 from src.utils.exceptions import BrowserException
 from src.utils.logger import get_logger
-
 
 logger = get_logger(__name__)
 
@@ -44,7 +43,7 @@ class BrowserController:
         user_data_dir: 浏览器用户数据目录
         driver: Selenium WebDriver实例
     """
-    
+
     def __init__(self, headless: bool = False, user_data_dir: Optional[str] = None):
         """初始化浏览器控制器。
         
@@ -55,9 +54,9 @@ class BrowserController:
         self.headless = headless
         self.user_data_dir = user_data_dir
         self.driver: Optional[webdriver.Chrome] = None
-        
+
         logger.info(f"初始化浏览器控制器 - 无头模式: {headless}, 数据目录: {user_data_dir}")
-    
+
     def start(self) -> None:
         """启动Chrome浏览器。
         
@@ -68,26 +67,26 @@ class BrowserController:
         """
         try:
             logger.info("正在启动Chrome浏览器...")
-            
+
             # 配置Chrome选项
             chrome_options = Options()
-            
+
             if self.headless:
                 chrome_options.add_argument("--headless")
                 chrome_options.add_argument("--disable-gpu")
                 logger.info("使用无头模式启动浏览器")
-            
+
             # 其他常用选项
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option("useAutomationExtension", False)
-            
+
             # 设置窗口大小
             chrome_options.add_argument("--window-size=1920,1080")
             chrome_options.add_argument("--start-maximized")
-            
+
             # 启动浏览器
             # 尝试使用 webdriver-manager 自动管理驱动
             if WEBDRIVER_MANAGER_AVAILABLE:
@@ -97,11 +96,11 @@ class BrowserController:
             else:
                 logger.info("使用 Selenium 内置驱动管理")
                 self.driver = webdriver.Chrome(options=chrome_options)
-            
+
             self.driver.maximize_window()
-            
+
             logger.info("浏览器启动成功")
-            
+
         except WebDriverException as e:
             error_msg = f"浏览器启动失败: {str(e)}"
             logger.error(error_msg)
@@ -110,7 +109,7 @@ class BrowserController:
             error_msg = f"浏览器启动时发生未知错误: {str(e)}"
             logger.error(error_msg)
             raise BrowserException(error_msg) from e
-    
+
     def stop(self) -> None:
         """关闭浏览器并清理资源。
         
@@ -126,7 +125,7 @@ class BrowserController:
                 logger.error(f"关闭浏览器时发生错误: {str(e)}")
         else:
             logger.warning("浏览器未启动，无需关闭")
-    
+
     def navigate_to(self, url: str) -> None:
         """导航到指定URL。
         
@@ -138,7 +137,7 @@ class BrowserController:
         """
         if not self.driver:
             raise BrowserException("浏览器未启动，无法导航")
-        
+
         try:
             logger.info(f"导航到: {url}")
             self.driver.get(url)
@@ -163,7 +162,7 @@ class BrowserController:
         """
         if not self.driver:
             raise BrowserException("浏览器未启动，无法查找元素")
-        
+
         try:
             by_type = By.CSS_SELECTOR if by == "css" else By.XPATH
             logger.debug(f"查找元素: {selector} (方式: {by})")
@@ -177,7 +176,7 @@ class BrowserController:
             error_msg = f"查找元素时发生错误: {str(e)}"
             logger.error(error_msg)
             raise BrowserException(error_msg) from e
-    
+
     def find_elements(self, selector: str, by: str = "css") -> List[WebElement]:
         """查找多个元素。
         
@@ -193,7 +192,7 @@ class BrowserController:
         """
         if not self.driver:
             raise BrowserException("浏览器未启动，无法查找元素")
-        
+
         try:
             by_type = By.CSS_SELECTOR if by == "css" else By.XPATH
             logger.debug(f"查找多个元素: {selector} (方式: {by})")
@@ -204,12 +203,12 @@ class BrowserController:
             error_msg = f"查找元素时发生错误: {str(e)}"
             logger.error(error_msg)
             raise BrowserException(error_msg) from e
-    
+
     def wait_for_element(
-        self, 
-        selector: str, 
-        by: str = "css", 
-        timeout: int = 10
+            self,
+            selector: str,
+            by: str = "css",
+            timeout: int = 10
     ) -> WebElement:
         """等待元素出现并返回。
         
@@ -228,17 +227,17 @@ class BrowserController:
         """
         if not self.driver:
             raise BrowserException("浏览器未启动，无法等待元素")
-        
+
         try:
             by_type = By.CSS_SELECTOR if by == "css" else By.XPATH
-            logger.debug(f"等待元素出现: {selector} (超时: {timeout}秒)")
-            
+            # logger.debug(f"等待元素出现: {selector} (超时: {timeout}秒)")
+
             wait = WebDriverWait(self.driver, timeout)
             element = wait.until(
                 EC.presence_of_element_located((by_type, selector))
             )
-            
-            logger.debug("元素已出现")
+
+            # logger.debug("元素已出现")
             return element
         except TimeoutException as e:
             error_msg = f"等待元素超时: {selector} (超时时间: {timeout}秒)"
@@ -248,7 +247,7 @@ class BrowserController:
             error_msg = f"等待元素时发生错误: {str(e)}"
             logger.error(error_msg)
             raise BrowserException(error_msg) from e
-    
+
     def save_cookies(self, filepath: str) -> None:
         """保存浏览器Cookie到文件。
         
@@ -262,25 +261,25 @@ class BrowserController:
         """
         if not self.driver:
             raise BrowserException("浏览器未启动，无法保存Cookie")
-        
+
         try:
             logger.info(f"保存Cookie到: {filepath}")
-            
+
             # 确保目录存在
             cookie_path = Path(filepath)
             cookie_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # 获取并保存Cookie
             cookies = self.driver.get_cookies()
             with open(filepath, "wb") as f:
                 pickle.dump(cookies, f)
-            
+
             logger.info(f"成功保存 {len(cookies)} 个Cookie")
         except Exception as e:
             error_msg = f"保存Cookie失败: {str(e)}"
             logger.error(error_msg)
             raise BrowserException(error_msg) from e
-    
+
     def load_cookies(self, filepath: str) -> None:
         """从文件加载Cookie到浏览器。
         
@@ -294,29 +293,29 @@ class BrowserController:
         """
         if not self.driver:
             raise BrowserException("浏览器未启动，无法加载Cookie")
-        
+
         try:
             cookie_path = Path(filepath)
             if not cookie_path.exists():
                 logger.warning(f"Cookie文件不存在: {filepath}")
                 return
-            
+
             logger.info(f"从文件加载Cookie: {filepath}")
-            
+
             # 获取当前页面域名
             current_url = self.driver.current_url
             logger.debug(f"当前页面URL: {current_url}")
-            
+
             # 加载Cookie
             with open(filepath, "rb") as f:
                 cookies = pickle.load(f)
-            
+
             logger.info(f"从文件读取到 {len(cookies)} 个Cookie")
-            
+
             # 统计成功和失败的Cookie数量
             success_count = 0
             fail_count = 0
-            
+
             for cookie in cookies:
                 try:
                     # 检查Cookie是否有必需的字段
@@ -324,7 +323,7 @@ class BrowserController:
                         logger.warning(f"Cookie缺少必需字段: {cookie}")
                         fail_count += 1
                         continue
-                    
+
                     # 尝试添加Cookie
                     self.driver.add_cookie(cookie)
                     success_count += 1
@@ -332,20 +331,20 @@ class BrowserController:
                 except Exception as e:
                     fail_count += 1
                     logger.debug(f"✗ 添加Cookie失败: {cookie.get('name', 'unknown')} - {str(e)}")
-            
+
             if success_count > 0:
                 logger.info(f"Cookie加载完成 - 成功: {success_count}, 失败: {fail_count}, 总数: {len(cookies)}")
             else:
                 logger.warning(f"所有Cookie加载失败！可能是域名不匹配或Cookie格式错误")
-            
+
             # 注意：不在这里刷新页面，让调用者决定何时刷新
             # 这样可以避免在错误的时机刷新导致Cookie失效
-            
+
         except Exception as e:
             error_msg = f"加载Cookie失败: {str(e)}"
             logger.error(error_msg)
             raise BrowserException(error_msg) from e
-    
+
     def is_logged_in(self) -> bool:
         """检查当前是否已登录。
         
@@ -360,14 +359,14 @@ class BrowserController:
         """
         if not self.driver:
             raise BrowserException("浏览器未启动，无法检查登录状态")
-        
+
         try:
             logger.debug("检查登录状态...")
-            
+
             # 方法1: 检查当前URL是否包含登录页面或错误页面特征
             current_url = self.driver.current_url
             logger.debug(f"当前URL: {current_url}")
-            
+
             # 检查是否在登录页面（包括淘宝登录和1688登录）
             login_indicators = [
                 "login.taobao.com",
@@ -377,7 +376,7 @@ class BrowserController:
             if any(indicator in current_url.lower() for indicator in login_indicators):
                 logger.info(f"当前在登录页面: {current_url}，未登录")
                 return False
-            
+
             # 检查是否在1688的404错误页面
             # https://page.1688.com/shtml/static/wrongpage.html 是1688的标准404页面
             error_indicators = [
@@ -388,54 +387,54 @@ class BrowserController:
             if any(indicator in current_url.lower() for indicator in error_indicators):
                 logger.warning(f"当前在1688错误页面(404): {current_url}，判定为未登录或无权限访问")
                 return False
-            
+
             # 方法2: 检查是否存在 1688 登录相关的Cookie（最重要的判断依据）
             cookies = self.driver.get_cookies()
             cookie_names = [cookie.get("name", "") for cookie in cookies]
-            
+
             # 1688/淘宝最关键的登录 Cookie
             # _tb_token_ 和 cookie2 是最重要的认证Cookie
             critical_cookies = ["_tb_token_", "cookie2"]
             has_critical_cookies = all(name in cookie_names for name in critical_cookies)
-            
+
             # 其他辅助登录 Cookie
             auth_cookies = ["t", "unb", "uc1", "lgc"]
             has_auth_cookie = any(name in cookie_names for name in auth_cookies)
-            
+
             logger.debug(f"Cookie检查 - 关键Cookie: {has_critical_cookies}, 辅助Cookie: {has_auth_cookie}")
             logger.debug(f"当前Cookie列表: {cookie_names}")
-            
+
             # 如果有关键Cookie，说明已登录
             if has_critical_cookies:
                 logger.info("✓ 检测到关键登录Cookie (_tb_token_, cookie2)，已登录")
                 return True
-            
+
             # 如果有辅助Cookie但没有关键Cookie，可能是Cookie不完整
             if has_auth_cookie:
                 logger.warning("检测到部分登录Cookie，但缺少关键Cookie，可能未完全登录")
                 return False
-            
+
             # 方法3: 检查页面标题
             try:
                 page_title = self.driver.title
                 logger.debug(f"页面标题: {page_title}")
-                
+
                 # 如果页面标题包含"登录"，说明未登录
                 if "登录" in page_title:
                     logger.info(f"页面标题包含'登录': {page_title}，未登录")
                     return False
-                    
+
                 # 如果页面标题包含"旺旺"或"消息"，说明已登录到聊天页面
                 if "旺旺" in page_title or "消息" in page_title or "IM" in page_title:
                     logger.info(f"页面标题显示已登录: {page_title}")
                     return True
             except Exception as e:
                 logger.debug(f"检查页面标题时出错: {str(e)}")
-            
+
             # 默认返回False，需要登录
             logger.info("未检测到明确的登录标识，判定为未登录")
             return False
-                
+
         except Exception as e:
             logger.warning(f"检查登录状态时发生错误: {str(e)}")
             # 发生错误时默认返回False，让系统等待用户登录
