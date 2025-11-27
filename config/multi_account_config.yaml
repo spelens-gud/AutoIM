@@ -1,0 +1,72 @@
+# 多账号配置文件示例
+
+# 多账号管理配置
+multi_account:
+  # 运行模式: multiprocess（多进程）或 async（异步）
+  mode: multiprocess
+  
+  # 最大同时运行的账号数量
+  max_accounts: 10
+  
+  # 消息队列大小
+  message_queue_size: 1000
+  
+  # 健康检查间隔（秒）
+  health_check_interval: 60
+  
+  # 是否使用无头模式
+  headless: false
+
+# 账号列表配置
+accounts:
+  # 账号1
+  - id: "account_1"
+    name: "客服1号"
+    cookie_file: "browser_data/account_1/cookies.pkl"
+    user_data_dir: "browser_data/account_1"
+    enabled: true
+    metadata:
+      department: "售前"
+      priority: 1
+  
+  # 账号2
+  - id: "account_2"
+    name: "客服2号"
+    cookie_file: "browser_data/account_2/cookies.pkl"
+    user_data_dir: "browser_data/account_2"
+    enabled: true
+    metadata:
+      department: "售后"
+      priority: 2
+  
+  # 账号3（示例：禁用状态）
+  - id: "account_3"
+    name: "客服3号"
+    cookie_file: "browser_data/account_3/cookies.pkl"
+    user_data_dir: "browser_data/account_3"
+    enabled: false
+    metadata:
+      department: "技术支持"
+      priority: 3
+
+# 基础配置（继承自原配置文件）
+browser:
+  headless: false
+  user_data_dir: "browser_data/default"
+
+wangwang:
+  home_url: "https://www.1688.com/"
+  chat_url: "https://air.1688.com/app/ocms-fusion-components-1688/def_cbu_web_im/index.html#/"
+  login_url: "https://login.1688.com/"
+
+system:
+  check_interval: 5
+  retry_times: 2
+  retry_delay: 1
+  session_timeout: 1800
+
+logging:
+  level: "INFO"
+  file: "logs/multi_account.log"
+  max_bytes: 10485760
+  backup_count: 5
