@@ -101,7 +101,7 @@ def check_environment():
 
     # 检查配置文件
     if not os.path.exists("config/config.yaml"):
-        print("⚠️  警告: 未找到配置文件 config/config.yaml")
+        print("   警告: 未找到配置文件 config/config.yaml")
         print("   系统将使用默认配置创建配置文件")
 
 
@@ -134,7 +134,7 @@ def main():
         try:
             import json
             import os
-            
+
             # 检查是否是文件路径
             if os.path.isfile(args.cookies):
                 logger.info(f"从文件加载Cookie: {args.cookies}")
@@ -144,21 +144,21 @@ def main():
                 # 尝试解析为JSON字符串
                 logger.info("解析Cookie JSON字符串")
                 cookies = json.loads(args.cookies)
-            
+
             if not isinstance(cookies, list):
                 logger.error("Cookie必须是一个列表")
-                print("❌ 错误: Cookie格式不正确，必须是一个列表")
+                print("错误: Cookie格式不正确，必须是一个列表")
                 sys.exit(1)
-            
+
             logger.info(f"成功解析 {len(cookies)} 个Cookie")
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"Cookie JSON解析失败: {e}")
-            print(f"❌ 错误: Cookie JSON格式不正确: {e}")
+            print(f"错误: Cookie JSON格式不正确: {e}")
             sys.exit(1)
         except Exception as e:
             logger.error(f"加载Cookie失败: {e}")
-            print(f"❌ 错误: 加载Cookie失败: {e}")
+            print(f"错误: 加载Cookie失败: {e}")
             sys.exit(1)
 
     rpa = None
@@ -181,17 +181,17 @@ def main():
 
     except WangWangRPAException as e:
         logger.error(f"RPA系统错误: {str(e)}")
-        print(f"\n❌ 错误: {str(e)}")
+        print(f"\n错误: {str(e)}")
         print("请检查日志文件获取详细信息")
         sys.exit(1)
 
     except KeyboardInterrupt:
         logger.info("接收到用户中断信号")
-        print("\n\n👋 用户中断，正在退出...")
+        print("\n\n用户中断，正在退出...")
 
     except Exception as e:
         logger.error(f"未预期的错误: {str(e)}", exc_info=True)
-        print(f"\n❌ 发生未预期的错误: {str(e)}")
+        print(f"\n发生未预期的错误: {str(e)}")
         print("请检查日志文件获取详细信息")
         sys.exit(1)
 

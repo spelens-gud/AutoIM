@@ -17,8 +17,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from src.rpa import WangWangRPA
-from src.utils.logger import setup_logging, get_logger
 from src.utils.cookie_parser import parse_cookie_string, validate_cookies
+from src.utils.logger import setup_logging, get_logger
 
 # 初始化日志
 setup_logging()
@@ -89,14 +89,14 @@ def start_rpa():
         cookie_string = data.get('cookie_string', None)
 
         logger.info(f"启动RPA系统 - 配置: {config_path}, 无头模式: {headless}")
-        
+
         # 优先级：cookies > cookie_string > 请求头Cookie
         if cookies is None:
             # 尝试从cookie_string解析
             if cookie_string:
                 try:
                     logger.info("从cookie_string参数解析Cookie")
-                    cookies = parse_cookie_string(cookie_string)
+                    cookies = parse_cookie_string(cookie_string.__str__())
                 except Exception as e:
                     return jsonify({
                         "success": False,
@@ -115,7 +115,7 @@ def start_rpa():
                         "message": f"解析请求头Cookie失败: {str(e)}",
                         "error_type": "invalid_cookie_header"
                     }), 400
-        
+
         # 验证Cookie格式
         if cookies is not None:
             if not isinstance(cookies, list):
@@ -124,13 +124,12 @@ def start_rpa():
                     "message": "cookies参数必须是一个列表",
                     "error_type": "invalid_parameter"
                 }), 400
-            
+
             logger.info(f"使用手动配置的Cookie（共 {len(cookies)} 个）")
-            
+
             # 验证Cookie有效性
             if not validate_cookies(cookies):
                 logger.warning("Cookie验证失败，但仍会尝试使用")
-                # 不阻止启动，只是警告
 
         # 初始化RPA实例
         rpa_instance = WangWangRPA(config_path=config_path, cookies=cookies)
@@ -139,16 +138,12 @@ def start_rpa():
             rpa_instance.config.browser_headless = True
             rpa_instance.browser.headless = True
 
-        # 启动RPA系统（包括登录检查）
+        # 启动RPA系统(包括登录检查)
         try:
             rpa_instance.start()
         except Exception as start_error:
-            # 启动失败，清理资源
             if rpa_instance and rpa_instance.browser:
-                try:
-                    rpa_instance.browser.stop()
-                except:
-                    pass
+                rpa_instance.browser.stop()
             rpa_instance = None
 
             # 检查是否是登录相关错误
@@ -648,12 +643,12 @@ def auto_start_rpa_system(config_path: str, headless: bool, cookies: Optional[li
         rpa_thread.start()
 
         logger.info("RPA系统自动启动成功")
-        print("✅ RPA系统已启动")
+        print("RPA系统已启动")
         print("=" * 60 + "\n")
 
     except Exception as e:
         logger.error(f"自动启动RPA系统失败: {str(e)}")
-        print(f"❌ RPA系统启动失败: {str(e)}")
+        print(f"RPA系统启动失败: {str(e)}")
         print("API服务将继续运行，您可以稍后通过API手动启动RPA\n")
 
 
@@ -674,14 +669,14 @@ def main():
         print(f"模式: 集成模式(API + RPA)")
         print(f"配置文件: {args.config}")
         print(f"无头模式: {'是' if args.headless else '否'}")
-        
+
         # 解析Cookie参数
         cookies = None
         if args.cookies:
             try:
                 import json
                 import os
-                
+
                 # 检查是否是文件路径
                 if os.path.isfile(args.cookies):
                     logger.info(f"从文件加载Cookie: {args.cookies}")
@@ -691,20 +686,20 @@ def main():
                     # 尝试解析为JSON字符串
                     logger.info("解析Cookie JSON字符串")
                     cookies = json.loads(args.cookies)
-                
+
                 if not isinstance(cookies, list):
-                    print("❌ 错误: Cookie格式不正确，必须是一个列表")
+                    print("错误: Cookie格式不正确，必须是一个列表")
                     sys.exit(1)
-                
+
                 print(f"使用手动配置的Cookie（共 {len(cookies)} 个）")
-                
+
             except json.JSONDecodeError as e:
-                print(f"❌ 错误: Cookie JSON格式不正确: {e}")
+                print(f"错误: Cookie JSON格式不正确: {e}")
                 sys.exit(1)
             except Exception as e:
-                print(f"❌ 错误: 加载Cookie失败: {e}")
+                print(f"错误: 加载Cookie失败: {e}")
                 sys.exit(1)
-        
+
         print("=" * 60)
 
         # 延迟启动RPA，让Flask先初始化
@@ -730,7 +725,7 @@ def main():
         )
     except KeyboardInterrupt:
         logger.info("接收到中断信号，正在停止...")
-        print("\n\n👋 正在停止服务...")
+        print("\n\n正在停止服务...")
 
         # 停止RPA系统
         if rpa_instance and is_running:

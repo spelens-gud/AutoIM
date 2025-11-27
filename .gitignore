@@ -15,6 +15,6 @@ browser_data
 .coverage
 .mypy_cache/
 
-.kiro
-.idea
+.kiro/
+.idea/
 .DS_Store
