@@ -407,73 +407,52 @@ class MessageHandler:
             MessageException: 当切换失败时抛出
         """
         try:
-            # logger.info(f"切换到联系人聊天窗口: {contact_id}")
+            iframes = self.browser.find_elements("iframe")
+            for iframe in iframes:
+                iframe_src = iframe.get_attribute("src") or ""
+                # 查找旺旺聊天的iframe
+                if "1688" in iframe_src and "im" in iframe_src.lower():
+                    logger.debug(f"找到旺旺iframe，切换进入: {iframe_src[:100]}")
+                    self.browser.driver.switch_to.frame(iframe)
+                    time.sleep(1)
+                    break
+            logger.debug(f"遍历所有会话项查找联系人")
+            conversation_items = self.browser.find_elements(".conversation-item")
+            if conversation_items:
+                for idx, item in enumerate(conversation_items):
+                    try:
+                        # 使用 XPath 在当前 item 下查找 .name 元素
+                        name_element = item.find_element("xpath", ".//div[@class='name']")
+                        name_text = name_element.text.strip()
 
-            # 等待页面加载完成 - 旺旺是SPA应用，需要等待
-            # logger.debug("等待联系人列表加载...")
-            # time.sleep(3)  # 增加等待时间，确保页面完全加载
+                        if name_text == contact_id:
+                            # 滚动到元素可见
+                            self.browser.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});",
+                                                               item)
+                            time.sleep(0.5)
 
-            # 首先尝试切换到iframe（如果存在）
-            # logger.debug("检查是否需要切换到iframe...")
-            try:
-                iframes = self.browser.find_elements("iframe")
-                for iframe in iframes:
-                    iframe_src = iframe.get_attribute("src") or ""
-                    # 查找旺旺聊天的iframe
-                    if "1688" in iframe_src and "im" in iframe_src.lower():
-                        logger.debug(f"找到旺旺iframe，切换进入: {iframe_src[:100]}")
-                        self.browser.driver.switch_to.frame(iframe)
-                        time.sleep(1)
-                        break
-            except Exception as e:
-                logger.debug(f"切换iframe失败或不需要切换: {str(e)}")
-
-            logger.debug(f"策略2: 遍历所有会话项查找联系人")
-            try:
-                conversation_items = self.browser.find_elements(".conversation-item")
-
-                if conversation_items:
-                    for idx, item in enumerate(conversation_items):
-                        try:
-                            # 使用 XPath 在当前 item 下查找 .name 元素
-                            name_element = item.find_element("xpath", ".//div[@class='name']")
-                            name_text = name_element.text.strip()
-
-                            if name_text == contact_id:
-                                # 滚动到元素可见
-                                self.browser.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});",
-                                                                   item)
-                                time.sleep(0.5)
-
-                                # 点击整个会话项
-                                item.click()
-                                logger.info(f"✓ 成功切换到联系人 {contact_id}")
-                                # time.sleep(1)
-                                return True
-                        except NoSuchElementException:
-                            logger.debug(f"  [{idx + 1}] 未找到 .name 元素")
-                            continue
-                        except StaleElementReferenceException:
-                            logger.debug(f"  [{idx + 1}] 元素已过期，跳过")
-                            continue
-                        except Exception as e:
-                            logger.debug(f"  [{idx + 1}] 处理失败: {str(e)}")
-                            continue
-                else:
-                    logger.warning("未找到任何 .conversation-item 元素")
-
-            except Exception as e:
-                logger.debug(f"策略2失败: {str(e)}")
+                            # 点击整个会话项
+                            item.click()
+                            logger.info(f"成功切换到联系人 {contact_id}")
+                            # time.sleep(1)
+                            return True
+                    except NoSuchElementException:
+                        logger.debug(f"  [{idx + 1}] 未找到 .name 元素")
+                        continue
+                    except StaleElementReferenceException:
+                        logger.debug(f"  [{idx + 1}] 元素已过期，跳过")
+                        continue
+                    except Exception as e:
+                        logger.debug(f"  [{idx + 1}] 处理失败: {str(e)}")
+                        continue
+            else:
+                logger.warning("未找到任何 .conversation-item 元素")
 
             # 所有策略都失败
             logger.info("提示: 请确保联系人在当前页面可见，或者检查联系人ID/名称是否正确")
 
             # 切换回主文档
-            try:
-                self.browser.driver.switch_to.default_content()
-            except Exception:
-                pass
-
+            self.browser.driver.switch_to.default_content()
             return False
 
         except Exception as e:
@@ -481,11 +460,7 @@ class MessageHandler:
             logger.error(error_msg)
 
             # 确保切换回主文档
-            try:
-                self.browser.driver.switch_to.default_content()
-            except Exception:
-                pass
-
+            self.browser.driver.switch_to.default_content()
             raise MessageException(error_msg) from e
 
     def get_chat_messages(self, contact_id: str, max_messages: int = 100) -> List[Message]:

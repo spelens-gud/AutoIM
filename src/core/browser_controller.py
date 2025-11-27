@@ -230,14 +230,12 @@ class BrowserController:
 
         try:
             by_type = By.CSS_SELECTOR if by == "css" else By.XPATH
-            # logger.debug(f"等待元素出现: {selector} (超时: {timeout}秒)")
 
             wait = WebDriverWait(self.driver, timeout)
             element = wait.until(
                 EC.presence_of_element_located((by_type, selector))
             )
 
-            # logger.debug("元素已出现")
             return element
         except TimeoutException as e:
             error_msg = f"等待元素超时: {selector} (超时时间: {timeout}秒)"
@@ -376,7 +374,7 @@ class BrowserController:
                     # 确保Cookie有domain字段
                     if 'domain' not in cookie:
                         cookie['domain'] = '.1688.com'
-                    
+
                     # 使用 CDP 命令设置 Cookie
                     self.driver.execute_cdp_cmd('Network.setCookie', {
                         'name': cookie['name'],
@@ -435,22 +433,22 @@ class BrowserController:
                 # 确保Cookie有domain字段
                 if 'domain' not in cookie:
                     cookie['domain'] = '.1688.com'
-                
+
                 # 确保Cookie有path字段
                 if 'path' not in cookie:
                     cookie['path'] = '/'
-                
+
                 domain = cookie['domain']
                 if domain not in cookies_by_domain:
                     cookies_by_domain[domain] = []
                 cookies_by_domain[domain].append(cookie)
-            
+
             logger.info(f"Cookie按域名分组: {list(cookies_by_domain.keys())}")
-            
+
             # 统计成功和失败的Cookie数量
             total_success = 0
             total_fail = 0
-            
+
             # 为每个域名访问对应的页面并设置Cookie
             domain_url_mapping = {
                 '.1688.com': 'https://www.1688.com',
@@ -460,7 +458,7 @@ class BrowserController:
                 '.alibaba.com': 'https://www.alibaba.com',
                 'alibaba.com': 'https://www.alibaba.com',
             }
-            
+
             for domain, domain_cookies in cookies_by_domain.items():
                 # 找到对应的URL
                 url = None
@@ -468,39 +466,39 @@ class BrowserController:
                     if domain_pattern in domain:
                         url = domain_url
                         break
-                
+
                 if not url:
                     # 尝试构造URL
                     clean_domain = domain.lstrip('.')
                     url = f"https://{clean_domain}"
-                
+
                 try:
                     logger.info(f"访问 {url} 以设置 {len(domain_cookies)} 个 {domain} 域名的Cookie")
                     self.driver.get(url)
-                    
+
                     # 等待页面加载
                     import time
                     time.sleep(1)
-                    
+
                     # 添加该域名的所有Cookie
                     success_count = 0
                     fail_count = 0
-                    
+
                     for cookie in domain_cookies:
                         try:
                             # Selenium对Cookie域名有严格要求
                             # 如果当前在 www.1688.com，可以设置 .1688.com 或 www.1688.com 的Cookie
                             # 但需要确保域名格式正确
-                            
+
                             # 创建Cookie副本以避免修改原始数据
                             cookie_to_add = cookie.copy()
-                            
+
                             # 如果域名以点开头，Selenium可能会拒绝
                             # 尝试移除前导点
                             if cookie_to_add['domain'].startswith('.'):
                                 # 先尝试不带点的域名
                                 cookie_to_add['domain'] = cookie_to_add['domain'].lstrip('.')
-                            
+
                             self.driver.add_cookie(cookie_to_add)
                             success_count += 1
                             logger.debug(f"✓ 成功添加Cookie: {cookie.get('name')} (domain: {cookie_to_add['domain']})")
@@ -509,25 +507,28 @@ class BrowserController:
                             try:
                                 self.driver.add_cookie(cookie)
                                 success_count += 1
-                                logger.debug(f"✓ 成功添加Cookie（第二次尝试）: {cookie.get('name')} (domain: {cookie['domain']})")
+                                logger.debug(
+                                    f"✓ 成功添加Cookie（第二次尝试）: {cookie.get('name')} (domain: {cookie['domain']})")
                             except Exception as e2:
                                 fail_count += 1
                                 # 打印第一个失败的Cookie的详细错误信息
                                 if fail_count == 1:
-                                    logger.warning(f"✗ 添加Cookie失败示例: {cookie.get('name')} (domain: {cookie['domain']})")
+                                    logger.warning(
+                                        f"✗ 添加Cookie失败示例: {cookie.get('name')} (domain: {cookie['domain']})")
                                     logger.warning(f"   Cookie内容: {cookie}")
                                     logger.warning(f"   错误信息: {str(e2)}")
                                 else:
-                                    logger.debug(f"✗ 添加Cookie失败: {cookie.get('name')} (domain: {cookie['domain']}) - {str(e2)}")
-                    
+                                    logger.debug(
+                                        f"✗ 添加Cookie失败: {cookie.get('name')} (domain: {cookie['domain']}) - {str(e2)}")
+
                     total_success += success_count
                     total_fail += fail_count
                     logger.info(f"{domain} 域名Cookie加载完成 - 成功: {success_count}, 失败: {fail_count}")
-                    
+
                 except Exception as e:
                     logger.warning(f"访问 {url} 失败: {str(e)}")
                     total_fail += len(domain_cookies)
-            
+
             logger.info(f"所有Cookie加载完成 - 总成功: {total_success}, 总失败: {total_fail}, 总数: {len(cookies)}")
 
         except Exception as e:
@@ -553,7 +554,7 @@ class BrowserController:
         try:
             logger.debug("检查登录状态...")
 
-            # 方法1: 检查当前URL是否包含登录页面或错误页面特征
+            # 检查当前URL是否包含登录页面或错误页面特征
             current_url = self.driver.current_url
             logger.debug(f"当前URL: {current_url}")
 
@@ -578,7 +579,7 @@ class BrowserController:
                 logger.warning(f"当前在1688错误页面(404): {current_url}，判定为未登录或无权限访问")
                 return False
 
-            # 方法2: 检查是否存在 1688 登录相关的Cookie（最重要的判断依据）
+            # 检查是否存在 1688 登录相关的Cookie（最重要的判断依据）
             cookies = self.driver.get_cookies()
             cookie_names = [cookie.get("name", "") for cookie in cookies]
 
@@ -604,7 +605,7 @@ class BrowserController:
                 logger.warning("检测到部分登录Cookie，但缺少关键Cookie，可能未完全登录")
                 return False
 
-            # 方法3: 检查页面标题
+            # 检查页面标题
             try:
                 page_title = self.driver.title
                 logger.debug(f"页面标题: {page_title}")

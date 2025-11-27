@@ -4,15 +4,12 @@
 """
 
 import time
-import random
 from typing import Optional
 
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.remote.webelement import WebElement
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
 from src.utils.logger import get_logger
-from src.utils.exceptions import BrowserException
 
 logger = get_logger(__name__)
 
@@ -110,34 +107,31 @@ class CaptchaHandler:
         """
         if current_depth >= max_depth:
             return False
-            
+
         try:
-            # 保存当前上下文
-            original_context = self.browser.driver.current_frame
-            
             # 查找所有iframe
             iframes = self.browser.driver.find_elements("tag name", "iframe")
             logger.debug(f"在深度 {current_depth} 找到 {len(iframes)} 个iframe")
-            
+
             for idx, iframe in enumerate(iframes):
                 try:
                     # 切换到iframe
                     self.browser.driver.switch_to.frame(iframe)
                     logger.debug(f"切换到iframe {idx + 1}/{len(iframes)} (深度 {current_depth})")
-                    
+
                     # 在当前iframe中检测验证码（不递归）
                     if self.detect_slider_captcha(check_iframes=False):
                         logger.info(f"✓ 在iframe {idx + 1} (深度 {current_depth}) 中找到验证码")
                         # 找到验证码后保持在这个iframe上下文中
                         return True
-                    
+
                     # 递归检查嵌套的iframe
                     if self._detect_captcha_in_iframes(max_depth, current_depth + 1):
                         return True
-                    
+
                     # 切回父级
                     self.browser.driver.switch_to.parent_frame()
-                    
+
                 except Exception as e:
                     logger.debug(f"检查iframe {idx + 1} 时出错: {str(e)}")
                     # 出错时尝试切回父级
@@ -146,9 +140,9 @@ class CaptchaHandler:
                     except Exception:
                         pass
                     continue
-            
+
             return False
-            
+
         except Exception as e:
             logger.debug(f"检测iframe中的验证码时出错: {str(e)}")
             return False
@@ -175,7 +169,7 @@ class CaptchaHandler:
 
                 # 切换到默认内容（主页面）
                 self.browser.driver.switch_to.default_content()
-                
+
                 # 查找并切换到包含验证码的iframe
                 captcha_found = self._switch_to_captcha_iframe()
                 if not captcha_found:
@@ -185,7 +179,7 @@ class CaptchaHandler:
 
                 # 关闭可能存在的多余验证码窗口
                 self._close_duplicate_captcha_windows()
-                
+
                 # 等待验证码加载
                 time.sleep(1)
 
@@ -243,11 +237,7 @@ class CaptchaHandler:
                 continue
 
         logger.error(f"滑动验证失败，已尝试 {max_attempts} 次")
-        # 确保最后切回主页面
-        try:
-            self.browser.driver.switch_to.default_content()
-        except Exception:
-            pass
+        self.browser.driver.switch_to.default_content()
         return False
 
     def _switch_to_captcha_iframe(self, max_depth: int = 3, current_depth: int = 0) -> bool:
@@ -264,40 +254,37 @@ class CaptchaHandler:
         """
         if current_depth >= max_depth:
             return False
-            
+
         try:
             # 查找所有iframe
             iframes = self.browser.driver.find_elements("tag name", "iframe")
             logger.debug(f"在深度 {current_depth} 找到 {len(iframes)} 个iframe")
-            
+
             for idx, iframe in enumerate(iframes):
                 try:
                     # 切换到iframe
                     self.browser.driver.switch_to.frame(iframe)
                     logger.debug(f"检查iframe {idx + 1}/{len(iframes)} (深度 {current_depth})")
-                    
+
                     # 在当前iframe中检测验证码
                     if self.detect_slider_captcha(check_iframes=False):
                         logger.info(f"✓ 在iframe {idx + 1} (深度 {current_depth}) 中找到验证码，已切换到该iframe")
                         return True
-                    
+
                     # 递归检查嵌套的iframe
                     if self._switch_to_captcha_iframe(max_depth, current_depth + 1):
                         return True
-                    
+
                     # 切回父级继续查找
                     self.browser.driver.switch_to.parent_frame()
-                    
+
                 except Exception as e:
                     logger.debug(f"检查iframe {idx + 1} 时出错: {str(e)}")
-                    try:
-                        self.browser.driver.switch_to.parent_frame()
-                    except Exception:
-                        pass
+                    self.browser.driver.switch_to.parent_frame()
                     continue
-            
+
             return False
-            
+
         except Exception as e:
             logger.debug(f"切换到验证码iframe时出错: {str(e)}")
             return False
@@ -345,12 +332,12 @@ class CaptchaHandler:
                                 elem_class = elem.get_attribute('class') or ''
                                 elem_id = elem.get_attribute('id') or ''
                                 elem_text = elem.text or ''
-                                
+
                                 # 滑块通常包含这些特征
-                                if ('nc_' in elem_class or 'nc_' in elem_id or 
-                                    'slide' in elem_class.lower() or 
-                                    '>>' in elem_text or
-                                    'btn' in elem_class.lower()):
+                                if ('nc_' in elem_class or 'nc_' in elem_id or
+                                        'slide' in elem_class.lower() or
+                                        '>>' in elem_text or
+                                        'btn' in elem_class.lower()):
                                     logger.debug(f"找到滑块元素: {selector}, 尺寸: {size}, class: {elem_class}")
                                     return elem
                     except Exception:
@@ -367,15 +354,13 @@ class CaptchaHandler:
                 # 在nc_wrapper内查找所有span
                 spans = nc_wrapper[0].find_elements("css selector", "span")
                 for span in spans:
-                    try:
-                        if span.is_displayed() and span.size['width'] > 20:
-                            span_class = span.get_attribute('class') or ''
-                            logger.debug(f"检查span: class={span_class}, size={span.size}")
-                            # 查找可拖动的span
-                            if 'nc_' in span_class or 'btn' in span_class.lower():
-                                logger.debug(f"通过父容器找到滑块: {span_class}")
-                                return span
-                    except Exception:
+                    if span.is_displayed() and span.size['width'] > 20:
+                        span_class = span.get_attribute('class') or ''
+                        logger.debug(f"检查span: class={span_class}, size={span.size}")
+                        # 查找可拖动的span
+                        if 'nc_' in span_class or 'btn' in span_class.lower():
+                            logger.debug(f"通过父容器找到滑块: {span_class}")
+                            return span
                         continue
         except Exception as e:
             logger.debug(f"通过父容器查找失败: {str(e)}")
@@ -436,11 +421,11 @@ class CaptchaHandler:
             # 创建动作链
             actions = ActionChains(self.browser.driver)
 
-            # 移动到滑块中心（极速）
+            # 移动到滑块中心(极速)
             actions.move_to_element(slider).perform()
             time.sleep(0.05)  # 固定延迟，不使用随机
 
-            # 点击并按住滑块（极速）
+            # 点击并按住滑块(极速)
             actions.click_and_hold(slider).perform()
             time.sleep(0.05)  # 固定延迟，不使用随机
 
@@ -448,7 +433,7 @@ class CaptchaHandler:
             tracks = self._generate_tracks(distance)
             logger.debug(f"生成轨迹点数: {len(tracks)}, 总距离: {sum(tracks)}px")
 
-            # 按照轨迹移动（极速，几乎无延迟）
+            # 按照轨迹移动(极速，几乎无延迟)
             for i, track in enumerate(tracks):
                 try:
                     actions.move_by_offset(track, 0).perform()
@@ -468,7 +453,7 @@ class CaptchaHandler:
                 end_location = slider.location
                 actual_distance = end_location['x'] - start_location['x']
                 logger.debug(f"滑块最终位置: {end_location}, 实际移动距离: {actual_distance}px")
-                
+
                 if actual_distance < distance * 0.8:
                     logger.warning(f"滑动距离不足: 目标{distance}px, 实际{actual_distance}px")
             except Exception as e:
@@ -499,13 +484,12 @@ class CaptchaHandler:
         """
         tracks = []
         current = 0
-        
+
         # 使用更简单的轨迹：快速移动大部分距离，最后微调
         # 前90%快速移动
         fast_distance = int(distance * 0.9)
         # 后10%慢速微调
-        slow_distance = distance - fast_distance
-        
+
         # 快速阶段：大步移动
         step_size = 10  # 每次移动10px
         while current < fast_distance:
@@ -513,7 +497,7 @@ class CaptchaHandler:
             if move > 0:
                 tracks.append(move)
                 current += move
-        
+
         # 慢速阶段：小步微调
         step_size = 3  # 每次移动3px
         while current < distance:
@@ -521,14 +505,14 @@ class CaptchaHandler:
             if move > 0:
                 tracks.append(move)
                 current += move
-        
+
         # 确保总距离达到目标
         total = sum(tracks)
         if total < distance:
             remaining = distance - total
             logger.debug(f"补充剩余距离: {remaining}px")
             tracks.append(remaining)
-        
+
         logger.debug(f"生成轨迹: {len(tracks)}个点, 总距离: {sum(tracks)}px")
         return tracks
 
@@ -567,7 +551,7 @@ class CaptchaHandler:
                 "[class*='captcha']",
                 "[id*='nc_']",
             ]
-            
+
             for selector in container_selectors:
                 try:
                     elements = self.browser.find_elements(selector)
@@ -576,14 +560,14 @@ class CaptchaHandler:
                             captcha_containers.append(elem)
                 except Exception:
                     continue
-            
+
             # 如果只有一个或没有验证码窗口，不需要处理
             if len(captcha_containers) <= 1:
                 logger.debug(f"验证码窗口数量正常: {len(captcha_containers)}")
                 return
-            
+
             logger.warning(f"检测到 {len(captcha_containers)} 个验证码窗口，尝试关闭多余窗口...")
-            
+
             # 按z-index排序，找出最上层的窗口
             containers_with_zindex = []
             for container in captcha_containers:
@@ -599,17 +583,17 @@ class CaptchaHandler:
                     containers_with_zindex.append((container, z_value))
                 except Exception:
                     containers_with_zindex.append((container, 0))
-            
+
             # 按z-index降序排序
             containers_with_zindex.sort(key=lambda x: x[1], reverse=True)
-            
+
             # 保留最上层的窗口，隐藏其他窗口
             for idx, (container, z_index) in enumerate(containers_with_zindex):
                 if idx == 0:
                     # 保留第一个（最上层）
                     logger.debug(f"保留最上层验证码窗口 (z-index: {z_index})")
                     continue
-                
+
                 try:
                     # 隐藏多余的验证码窗口
                     self.browser.driver.execute_script(
@@ -619,8 +603,8 @@ class CaptchaHandler:
                     logger.debug(f"隐藏多余验证码窗口 {idx} (z-index: {z_index})")
                 except Exception as e:
                     logger.debug(f"隐藏验证码窗口失败: {str(e)}")
-            
-            logger.info(f"✓ 已处理重复验证码窗口，保留1个，隐藏{len(captcha_containers)-1}个")
-            
+
+            logger.info(f"✓ 已处理重复验证码窗口，保留1个，隐藏{len(captcha_containers) - 1}个")
+
         except Exception as e:
             logger.debug(f"关闭重复验证码窗口时出错: {str(e)}")
