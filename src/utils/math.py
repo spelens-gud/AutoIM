@@ -4,5 +4,5 @@ def add(a: float, b: float) -> float:
 
 def divide(a: float, b: float) -> float:
     if b == 0:
-        raise ValueError("division by zero")
+        raise ValueError("除数不能为零")
     return a / b

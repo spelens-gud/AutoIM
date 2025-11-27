@@ -854,7 +854,7 @@ class MessageHandler:
                     else:
                         logger.warning("未找到聊天iframe，尝试在主文档中查找输入框")
                 except Exception as e:
-                    logger.warning("切换到iframe失败: {}，尝试在主文档中查找", e)
+                    logger.warning(f"切换到iframe失败: {e}，尝试在主文档中查找")
 
                 if not iframe_switched:
                     logger.error("未能切换到聊天iframe，消息发送可能失败")
@@ -862,12 +862,12 @@ class MessageHandler:
 
                 logger.debug("切换到目标联系人...")
                 if not self.switch_to_chat(contact_id):
-                    logger.warning("无法切换到联系人 {} 的聊天窗口".format(contact_id))
+                    logger.warning(f"无法切换到联系人 {contact_id} 的聊天窗口")
                     if attempt == 0:
                         logger.info("尝试调试联系人列表结构...")
                         self.debug_contact_list()
                 else:
-                    logger.info("✓ 已切换到联系人".format(contact_id))
+                    logger.info(f"✓ 已切换到联系人 {contact_id}")
                     # 等待聊天界面加载
                     time.sleep(1)
 
@@ -905,7 +905,7 @@ class MessageHandler:
                                         input_element = elem
 
                             except Exception as e:
-                                logger.debug("  元素[{}] 检查失败: {}".format(idx, e))
+                                logger.debug(f"  元素[{idx}] 检查失败: {e}")
                                 continue
 
                         # 如果找到了明确的消息输入框，停止搜索
@@ -934,10 +934,10 @@ class MessageHandler:
                                         input_element = elem
                                         break
                             except Exception as e:
-                                logger.debug("  [{}] 检查失败: {}".format(i, e))
+                                logger.debug(f"  [{i}] 检查失败: {e}")
                                 continue
                     except Exception as e:
-                        logger.error("重试失败: {}".format(e))
+                        logger.error(f"重试失败: {e}")
 
                     if not input_element:
                         self.browser.driver.switch_to.default_content()
@@ -999,7 +999,7 @@ class MessageHandler:
                     input_element.send_keys(Keys.RETURN)
                 else:
                     send_button.click()
-                logger.info("✓ 消息发送成功: {}...".format(content))
+                logger.info(f"✓ 消息发送成功: {content[:50]}...")
 
                 self.browser.driver.switch_to.default_content()
 
