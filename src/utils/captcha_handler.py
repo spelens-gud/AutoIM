@@ -147,7 +147,7 @@ class CaptchaHandler:
             logger.debug(f"检测iframe中的验证码时出错: {str(e)}")
             return False
 
-    def handle_slider_captcha(self, max_attempts: int = 3) -> bool:
+    def handle_slider_captcha(self, max_attempts: int = 3, try_close_first: bool = True) -> bool:
         """处理滑动验证码。
         
         模拟人类行为，将滑块拖动到正确位置。
@@ -155,10 +155,19 @@ class CaptchaHandler:
         
         Args:
             max_attempts: 最大尝试次数，默认3次
+            try_close_first: 是否先尝试关闭验证码弹窗，默认True
             
         Returns:
             True表示验证成功，False表示验证失败
         """
+        # 备选方案1: 先尝试直接关闭验证码弹窗
+        if try_close_first:
+            logger.info("尝试备选方案: 直接关闭验证码弹窗...")
+            if self._try_close_captcha_window():
+                logger.info("✓ 成功关闭验证码弹窗")
+                return True
+            logger.info("无法关闭验证码弹窗，继续尝试滑动验证...")
+        
         for attempt in range(max_attempts):
             try:
                 if attempt > 0:
@@ -535,6 +544,146 @@ class CaptchaHandler:
 
         logger.warning(f"等待验证码消失超时 ({timeout}秒)")
         return False
+
+    def _try_close_captcha_window(self) -> bool:
+        """尝试直接关闭验证码弹窗。
+        
+        备选方案：当检测到验证码时，尝试查找并点击关闭按钮，
+        直接关闭验证码弹窗而不进行滑动验证。
+        
+        Returns:
+            True表示成功关闭验证码窗口，False表示未找到关闭按钮或关闭失败
+        """
+        try:
+            logger.debug("查找验证码弹窗的关闭按钮...")
+            
+            # 切换到默认内容
+            self.browser.driver.switch_to.default_content()
+            
+            # 尝试切换到包含验证码的iframe
+            captcha_found = self._switch_to_captcha_iframe()
+            if not captcha_found:
+                logger.debug("未找到包含验证码的iframe，尝试在主页面查找关闭按钮")
+            
+            # 常见的关闭按钮选择器
+            close_button_selectors = [
+                # 通用关闭按钮
+                "button.close",
+                ".close-button",
+                ".close-btn",
+                "[class*='close']",
+                "[class*='Close']",
+                # X 图标
+                "span.close",
+                "i.close",
+                "div.close",
+                # 通过文本查找
+                "//button[contains(text(), '关闭')]",
+                "//button[contains(text(), '取消')]",
+                "//span[contains(text(), '×')]",
+                "//span[contains(text(), 'X')]",
+                "//div[contains(@class, 'close')]",
+                "//i[contains(@class, 'close')]",
+                # 阿里系验证码特定的关闭按钮
+                ".nc_close",
+                "#nc_close",
+                "[id*='close']",
+                # 弹窗遮罩层（点击遮罩层也可能关闭）
+                ".modal-mask",
+                ".overlay",
+                "[class*='mask']",
+            ]
+            
+            for selector in close_button_selectors:
+                try:
+                    if selector.startswith("//"):
+                        elements = self.browser.find_elements(selector, by="xpath")
+                    else:
+                        elements = self.browser.find_elements(selector)
+                    
+                    for elem in elements:
+                        try:
+                            if elem.is_displayed() and elem.is_enabled():
+                                # 检查元素是否在验证码窗口附近
+                                elem_class = elem.get_attribute('class') or ''
+                                elem_id = elem.get_attribute('id') or ''
+                                elem_text = elem.text or ''
+                                
+                                logger.debug(f"找到可能的关闭按钮: {selector}, class={elem_class}, id={elem_id}, text={elem_text}")
+                                
+                                # 尝试点击关闭按钮
+                                try:
+                                    elem.click()
+                                    logger.info(f"✓ 点击关闭按钮: {selector}")
+                                    time.sleep(0.5)
+                                    
+                                    # 检查验证码是否消失
+                                    self.browser.driver.switch_to.default_content()
+                                    if not self.detect_slider_captcha(check_iframes=True):
+                                        logger.info("✓ 验证码弹窗已关闭")
+                                        return True
+                                    else:
+                                        logger.debug("点击后验证码仍然存在，继续尝试其他按钮")
+                                        # 重新切换到验证码iframe
+                                        self._switch_to_captcha_iframe()
+                                except Exception as e:
+                                    logger.debug(f"点击关闭按钮失败: {str(e)}")
+                                    continue
+                        except Exception:
+                            continue
+                except Exception as e:
+                    logger.debug(f"选择器 {selector} 查找失败: {str(e)}")
+                    continue
+            
+            # 尝试使用JavaScript直接隐藏验证码容器
+            logger.debug("尝试使用JavaScript隐藏验证码容器...")
+            try:
+                # 查找验证码容器
+                container_selectors = [
+                    ".nc_wrapper",
+                    ".nc-container",
+                    "[class*='captcha']",
+                    "[id*='nc_']",
+                ]
+                
+                for selector in container_selectors:
+                    try:
+                        elements = self.browser.find_elements(selector)
+                        for elem in elements:
+                            if elem.is_displayed():
+                                # 尝试隐藏容器
+                                self.browser.driver.execute_script(
+                                    "arguments[0].style.display = 'none';",
+                                    elem
+                                )
+                                logger.debug(f"隐藏验证码容器: {selector}")
+                                
+                                # 检查是否成功
+                                time.sleep(0.5)
+                                self.browser.driver.switch_to.default_content()
+                                if not self.detect_slider_captcha(check_iframes=True):
+                                    logger.info("✓ 成功隐藏验证码容器")
+                                    return True
+                                # 重新切换到验证码iframe
+                                self._switch_to_captcha_iframe()
+                    except Exception:
+                        continue
+            except Exception as e:
+                logger.debug(f"使用JavaScript隐藏验证码失败: {str(e)}")
+            
+            # 切回主页面
+            self.browser.driver.switch_to.default_content()
+            logger.debug("未找到有效的关闭按钮")
+            return False
+            
+        except Exception as e:
+            logger.debug(f"尝试关闭验证码弹窗时出错: {str(e)}")
+            # 确保切回主页面
+            try:
+                self.browser.driver.switch_to.default_content()
+            except Exception:
+                pass
+            return False
 
     def _close_duplicate_captcha_windows(self) -> None:
         """关闭重复的验证码窗口。
